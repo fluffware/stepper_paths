@@ -1,0 +1,9 @@
+[package]
+name = "paths"
+version = "0.1.0"
+authors = ["Simon Berg <ksb@fluffware.se>"]
+
+[dependencies]
+
+libc="0.2.30"
+num="0.1.41"
