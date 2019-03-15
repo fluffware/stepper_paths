@@ -9,15 +9,15 @@ fn same_sign(a:i64, b:i64) -> bool
     }
 }
 
-fn sqpoly(a:i64, b:i64, c:i64, x:i64) ->i64
+pub fn sqpoly(a:i64, b:i64, c:i64, x:i64) ->i64
 {
     a*x*x + b*x - c
 }
 
 /* Find the value of x that satisfies a*x^2 + b*x >= c
-Such that x+1 or x-1 will not satisfy the inequality */
+Such that x+1 or x-1 will not satisfy the comparasion */
 
-fn find_root(a:i64, b:i64, c: i64, min: i64, max: i64) -> Option<i64>
+pub fn find_root(a:i64, b:i64, c: i64, min: i64, max: i64) -> Option<i64>
 {
     let mut minx = min;
     let mut maxx = max;
@@ -46,8 +46,6 @@ fn find_root(a:i64, b:i64, c: i64, min: i64, max: i64) -> Option<i64>
     }
 }
 
-const MAX_LIMIT:i64 = 2642245;
-const MIN_LIMIT:i64 = -2642245;
 
 // a > 0
 pub fn find_roots(a:i64, b:i64, c: i64) -> Option<(i64, i64)>
@@ -75,8 +73,13 @@ pub fn find_roots(a:i64, b:i64, c: i64) -> Option<(i64, i64)>
             return Some((xmin, xmin + 1));
         }
     }
-    match (find_root(a,b,c, MIN_LIMIT, xmin), 
-           find_root(a,b,c, xmin, MAX_LIMIT)) {
+    let mut limit = 16;
+    while sqpoly(a,b,c, xmin + limit) <= 0 {
+        limit *= 2;
+    }
+    limit += 1;
+    match (find_root(a,b,c, xmin - limit, xmin), 
+           find_root(a,b,c, xmin, xmin + limit)) {
         (Some(x1), Some(x2)) => Some((x1, x2)),
         _ => None
     }
@@ -192,6 +195,9 @@ fn find_root_check_limits(a:i64, b:i64, c:i64, min:i64, max:i64)
 #[cfg(test)]
 fn find_root_check(a:i64, b:i64, c:i64)
 {
+    const MAX_LIMIT:i64 = 2642245;
+    const MIN_LIMIT:i64 = -2642245;
+
     print!("{}*x^2 + {}*x = {} => ",a,b,c);
     let xmin = round_idiv(-b, 2*a);
     find_root_check_limits(a,b,c, xmin, MAX_LIMIT);

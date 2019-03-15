@@ -35,7 +35,11 @@ impl<T:Sized+PartialOrd+Copy+Debug> MultiRange<T>
     {
         MultiRange {ranges: Vec::new()}
     }
-    
+
+    pub fn range(low: T, high: T) -> MultiRange<T>{
+        MultiRange {ranges: vec![Range::<T> {low: low, high: high}]}
+    }
+
     pub fn or_slice(&mut self, a:&[(T,T)]) ->  &mut Self
     {
         for &(low,high) in a {

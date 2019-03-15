@@ -7,6 +7,7 @@ use paths::integer_curve;
 
 use std::env;
 
+/*
 macro_rules! permutate {
     ( $f:ident ( $v:expr ) ) => {
         for &q in $v {$f(q)}
@@ -21,7 +22,7 @@ macro_rules! permutate {
         for &q in $v {$f($($a),+,q)} 
     };
 }
-
+*/
     
 
 fn main() {

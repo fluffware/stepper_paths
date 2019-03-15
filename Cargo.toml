@@ -3,7 +3,23 @@ name = "paths"
 version = "0.1.0"
 authors = ["Simon Berg <ksb@fluffware.se>"]
 
+[[bin]]
+name = "paths"
+path = "src/main.rs"
+
+[[bin]]
+name = "animate_curve"
+path = "src/animate_curve.rs"
+
+[[bin]]
+name = "svg_path"
+path = "src/svg_path.rs"
+
 [dependencies]
 
 libc="0.2.30"
 num="0.1.41"
+serial="*"
+xml-rs = "0.6.1"
+nom = "^4.0"
+getopts = "0.2"
