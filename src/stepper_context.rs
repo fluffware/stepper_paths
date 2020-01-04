@@ -111,6 +111,40 @@ impl StepperContext {
         }
     }
 
+    pub fn add_acc_interval(&mut self, acc_x: i16, acc_y: i16, interval: u32)
+    {
+        let acc = [acc_x, acc_y];
+        assert!(interval >= 1);
+        for i in 0..N_CHANNELS {
+            /*
+            if self.channels[i].ticks == self.event_ticks {
+                self.events.pop();
+            }
+             */
+            self.events.push(StepperEvent {
+                ticks: (self.channels[i].ticks-self.event_ticks) as u32,
+                cmd: Command::Acc(i as u8, acc[i])
+            });
+            self.channels[i].pos += 
+                2 * interval as i64 * self.channels[i].v as i64
+                + interval as i64 * interval as i64 * acc[i] as i64;
+            self.channels[i].v += interval as i32 * acc[i] as i32;
+            self.event_ticks = self.channels[i].ticks;
+            self.channels[i].ticks += interval as u64;
+        }
+        assert_eq!(self.channels[X_INDEX].ticks, self.channels[Y_INDEX].ticks);
+    }
+
+    pub fn add_weight_change(&mut self, weight: i32, when: u64)
+    {
+        assert!(when >= self.event_ticks);
+        self.events.push(StepperEvent {
+            ticks: (when-self.event_ticks) as u32,
+            cmd: Command::Weight(weight)
+        });
+        self.event_ticks = when;
+    }
+    
     fn acc_segs_to_events(&mut self, acc: &[Vec<AccSegment>]) 
     {
         let mut p = Vec::new();
@@ -144,6 +178,7 @@ impl StepperContext {
         }
     }
 
+    /*
     fn event_distance(&self, end: u64) ->([i64;N_CHANNELS], [i32; N_CHANNELS])
     {
         let mut a = [0i16;N_CHANNELS];
@@ -178,6 +213,7 @@ impl StepperContext {
         (s, v)
     }
    
+*/
     
     pub fn goto_speed(&mut self, x: i64, y: i64, vx: i32, vy:i32)
     {
@@ -199,7 +235,7 @@ impl StepperContext {
         let seq = integer_curve::shortest_curve_sequences(limits);
         let v_end = [vx,vy];
         for i in 0..N_CHANNELS {
-            println!("{}: {:?}", i, seq[i]);
+            //println!("{}: {:?}", i, seq[i]);
             let (s, v) = seq[i].acc_distance(self.channels[i].v);
             self.channels[i].pos += s;
             assert_eq!(v, v_end[i]);
@@ -208,9 +244,11 @@ impl StepperContext {
         self.channels[Y_INDEX].v = vy;
         self.acc_segs_to_events(&seq);
         assert_eq!(self.channels[X_INDEX].ticks, self.channels[Y_INDEX].ticks);
-        
+
+        /*
         let (s,v) = self.event_distance(self.channels[X_INDEX].ticks);
         println!("s={:?}, v={:?}", s,v);
+         */
     }
     
     pub fn goto(&mut self, x: i64, y: i64)
@@ -237,7 +275,9 @@ impl StepperContext {
                 self.channels[i].pos += (self.channels[i].v 
                                          + self.a_max * t + v[i]) as i64;
             }
+            self.channels[i].v = v[i]; 
         }
+        self.acc_segs_to_events(&acc);
     }
 
    
@@ -258,9 +298,9 @@ impl StepperContext {
         let vx = ((c1x as f64) * scale).round() as i32;
         let vy = ((c1y as f64) * scale).round() as i32;
 
-        println!("In: ({},{}) Out: ({},{})", 
+        /*println!("In: ({},{}) Out: ({},{})", 
                 self.channels[X_INDEX].v, self.channels[Y_INDEX].v,
-                vx, vy);
+                vx, vy);*/
 
         // Adjust velocities if difference is too big
         if !velocity_matches(self.channels[X_INDEX].v as f64,
@@ -325,21 +365,23 @@ impl StepperContext {
                        
             
         
-        println!("D: ({}, {})", x - self.channels[X_INDEX].pos,
-                 y - self.channels[Y_INDEX].pos);             
+    /*println!("D: ({}, {})", x - self.channels[X_INDEX].pos,
+                 y - self.channels[Y_INDEX].pos);             */
         self.channels[X_INDEX].pos = x;
         self.channels[Y_INDEX].pos = y;
 
         self.acc_segs_to_events(&acc);
         assert_eq!(self.channels[X_INDEX].ticks, self.channels[Y_INDEX].ticks);
-        println!("Dist: ({}, {})", 
+    /*println!("Dist: ({}, {})", 
                  acc[X_INDEX].acc_distance(self.channels[X_INDEX].v).0,
-                 acc[Y_INDEX].acc_distance(self.channels[Y_INDEX].v).0);
+    acc[Y_INDEX].acc_distance(self.channels[Y_INDEX].v).0);*/
         self.channels[X_INDEX].v = dvx;
         self.channels[Y_INDEX].v = dvy;
 
+        /*
         let (s,v) = self.event_distance(self.channels[X_INDEX].ticks);
         println!("s={:?}, v={:?}", s,v);
+         */
     }
     
     fn rotate(x:f64, y:f64, sin:f64, cos:f64) -> (f64,f64)
@@ -474,9 +516,9 @@ impl StepperContext {
                     ((x*c - y *s) as i64 + x0,  (x*s + y*c) as i64 + y0)
                 }
             };
-
+            
             let next_seg = iter.next();
-            println!("({},{}) -> ({},{})", x0,y0, end_x, end_y);
+            //println!("({},{}) -> ({},{})", x0,y0, end_x, end_y);
             // Skip zero length gotos and lines */
             if match *seg {
                 // Curves may start and end in the same point as they start
@@ -592,6 +634,13 @@ impl StepperContext {
     {
         (self.channels[X_INDEX].v, self.channels[Y_INDEX].v)
     }
+    
+    pub fn ticks(&self) -> u64
+    {
+        assert_eq!(self.channels[X_INDEX].ticks, self.channels[Y_INDEX].ticks);
+        self.channels[X_INDEX].ticks
+    }
+
     
     pub fn events<'a>(&'a mut self) -> &'a Vec<StepperEvent>
     {

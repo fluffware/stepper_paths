@@ -15,6 +15,10 @@ path = "src/animate_curve.rs"
 name = "svg_path"
 path = "src/svg_path.rs"
 
+[[bin]]
+name = "image_raster"
+path = "src/image_raster.rs"
+
 [dependencies]
 
 libc="0.2.30"
@@ -23,3 +27,5 @@ serial="*"
 xml-rs = "0.6.1"
 nom = "^4.0"
 getopts = "0.2"
+serde_json = "1.0"
+image = "*"

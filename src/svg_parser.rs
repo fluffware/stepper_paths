@@ -2,6 +2,8 @@ use std::io::BufReader;
 use std::io::Read;
 
 use xml::reader::{EventReader, XmlEvent};
+use xml::attribute::OwnedAttribute;
+use xml::name::OwnedName;
 
 use stepper_context::CurveSegment;
 use coords::Point;
@@ -169,7 +171,7 @@ mod parser {
                 
            ));
 
-    named!(pub viewBox_args<Input, [f64;4]>,
+    named!(pub view_box_args<Input, [f64;4]>,
            map!(tuple!(wsp_opt, number, comma_wsp, number, comma_wsp, 
                     number, comma_wsp, number, wsp_opt),
                 |(_,a,_,b,_,c,_,d,_)| [a,b,c,d] 
@@ -211,7 +213,7 @@ fn parse_transform(s: &str) -> Result<Transform, nom::Err<CompleteStr, u32> > {
 
 fn parse_view_box(s: &str) -> Result<[f64;4], nom::Err<CompleteStr, u32> > {
     
-    match parser::viewBox_args(CompleteStr(s)) {
+    match parser::view_box_args(CompleteStr(s)) {
         Ok((_,o)) => Ok(o),
         Err(e) => Err(e)
     }
@@ -326,7 +328,7 @@ fn transform_ellipse(rx: f64, ry: f64, rot: f64, m: [f64;4]) -> (f64,f64, f64)
 
     let mut q = [A, C,
                  C, B];
-    println!("Before: {}*x^2 + {}*y^2 + {}*x*y = 1", q[0],q[3],2.0*q[2]);
+    //println!("Before: {}*x^2 + {}*y^2 + {}*x*y = 1", q[0],q[3],2.0*q[2]);
     let invm = match invert2x2(m) {
         Some(m) => m,
         None => panic!("Can't invert transformation matrix for ellipse")
@@ -334,7 +336,7 @@ fn transform_ellipse(rx: f64, ry: f64, rot: f64, m: [f64;4]) -> (f64,f64, f64)
 
     q = mul2x2(transpose2x2(invm), q);
     q = mul2x2(q, invm);
-println!("After: {}*x^2 + {}*y^2 + {}*x*y = 1", q[0],q[3],2.0*q[2]);
+    //println!("After: {}*x^2 + {}*y^2 + {}*x*y = 1", q[0],q[3],2.0*q[2]);
     let trot = (-q[2]* 2.0).atan2(q[3] - q[0])/2.0;
 
     let (ts, tc) = trot.sin_cos();
@@ -360,7 +362,7 @@ fn build_path(ctxt: &mut PathContext, cmd: char, args: &Vec<f64>,
               segs: &mut Vec<CurveSegment>, tr: &Transform, first_elem: bool) 
               -> Result<(), String>
 {
-    println!("{}: {:?}", cmd, args);
+    //println!("{}: {:?}", cmd, args);
     
     let rel = cmd >= 'a' && cmd <= 'z';
     match cmd {
@@ -446,12 +448,12 @@ fn build_path(ctxt: &mut PathContext, cmd: char, args: &Vec<f64>,
             ctxt.last_control = None;
         },
         'c' | 'C' => {
-            println!("curve-to");
+            //println!("curve-to");
             if args.len() < 6 {
-                return Err("Curve-to command must have at least six arguments".to_string());
+                return Err("Cubic curve-to command must have at least six arguments".to_string());
             }
             if args.len() % 6 != 0 {
-                return Err("The number of arguments to curve-to must be a multiple of six".to_string());
+                return Err("The number of arguments to cubic curve-to must be a multiple of six".to_string());
             }
             let mut arg_iter = args.iter();
             
@@ -491,6 +493,54 @@ fn build_path(ctxt: &mut PathContext, cmd: char, args: &Vec<f64>,
                 ctxt.last_control = Some(c2);
                 let p2 = *tr * p2;
                 let c2 = *tr * c2 - p2;
+                segs.push(CurveSegment::CurveTo(p2.x as i64, p2.y as i64, 
+                                                c1.x as i64, c1.y as i64,
+                                                c2.x as i64, c2.y as i64));
+            }
+        },
+         'q' | 'Q' => {
+            //println!("curve-to");
+            if args.len() < 4 {
+                return Err("Quadratic curve-to command must have at least four arguments".to_string());
+            }
+            if args.len() % 4 != 0 {
+                return Err("The number of arguments to quadraticcurve-to must be a multiple of four".to_string());
+            }
+            let mut arg_iter = args.iter();
+            
+            loop {
+                let offset = if rel {ctxt.pos} else {Point{x: 0.0, y:0.0}};
+                
+                let &x1 = match arg_iter.next() {
+                    Some(v) => v,
+                    None => break
+                };
+                let &y1 = match arg_iter.next() {
+                    Some(v) => v,
+                    None => break
+                };
+              
+                let &x = match arg_iter.next() {
+                    Some(v) => v,
+                    None => break
+                };
+                let &y = match arg_iter.next() {
+                    Some(v) => v,
+                    None => break
+                };
+                let p2 = Point{x: x, y: y} + offset;
+                let m1 = Point{x: x1, y: y1} + offset;
+                println!("p2: {}, m1: {}", p2, m1);
+
+                ctxt.last_control = Some((m1-p2) * (2.0 / 3.0) + p2);
+                println!("last_control: {:?}", ctxt.last_control);
+                
+                let c1 = (*tr * m1 - *tr * ctxt.pos) * (2.0 / 3.0);
+                ctxt.pos = p2;
+                let p2 = *tr * p2;
+                let c2 = (*tr * m1 - p2) * (2.0 / 3.0);
+                
+
                 segs.push(CurveSegment::CurveTo(p2.x as i64, p2.y as i64, 
                                                 c1.x as i64, c1.y as i64,
                                                 c2.x as i64, c2.y as i64));
@@ -544,8 +594,8 @@ fn build_path(ctxt: &mut PathContext, cmd: char, args: &Vec<f64>,
                 if dx == 0.0 && dy == 0.0 {
                     return Err("Zero length arc".to_string());
                 }
-                println!("rx: {} ry: {}",rx,ry);
-                println!("x: {} y: {}",x,y);
+                //println!("rx: {} ry: {}",rx,ry);
+                //println!("x: {} y: {}",x,y);
 
                 // Transform to rendering coords
                 let (rx, ry, rot) = 
@@ -565,14 +615,14 @@ fn build_path(ctxt: &mut PathContext, cmd: char, args: &Vec<f64>,
                 // ellipse.  This rotates the line in the opposite
                 // direction of the ellipse,
                 let (dx,dy) = (dx * rc - dy * rs, dx * rs + dy * rc);
-                println!("dx: {} dy: {}",dx,dy);
+                //println!("dx: {} dy: {}",dx,dy);
 
                 if dy.abs() < dx.abs() {
                     let k = dy / dx;
                     let ry2 = ry*ry;
                     let c = ry2 / (rx * rx) + k * k;
                     let m2 = (c * dx *dx / 4.0 - ry2) / (k*k/c - 1.0);
-                    println!("(dy/dx) m2: {}",m2);
+                    //println!("(dy/dx) m2: {}",m2);
                     if m2 < 0.0 {
                         return Err("Ellipse too small for given endpoints of arc".to_string());
                     }
@@ -588,7 +638,7 @@ fn build_path(ctxt: &mut PathContext, cmd: char, args: &Vec<f64>,
                     let rx2 = rx*rx;
                     let c = rx2 / (ry * ry) + k * k;
                     let m2 = (c * dy *dy / 4.0 - rx2) / (k*k/c - 1.0);
-                    println!("(dx/dy) m2: {}",m2);
+                    //println!("(dx/dy) m2: {}",m2);
                     if m2 < 0.0 {
                         return Err("Ellipse too small for given endpoints of arc".to_string());
                     }
@@ -600,7 +650,7 @@ fn build_path(ctxt: &mut PathContext, cmd: char, args: &Vec<f64>,
                     x1 = k*y1+m;
                     x2 = k*y2+m;
                 }
-                println!("({}, {}) ({}, {})",x1,y1, x2,y2);
+                //println!("({}, {}) ({}, {})",x1,y1, x2,y2);
                 let a1 = (y1/ry).atan2(x1/rx);
                 let a2 = (y2/ry).atan2(x2/rx);
                 
@@ -621,7 +671,7 @@ fn build_path(ctxt: &mut PathContext, cmd: char, args: &Vec<f64>,
                 };
 
                 
-                println!("a1: {} a2: {}",a1,a2);
+                /* println!("a1: {} a2: {}",a1,a2);
 
                
                 let xa1 = rx * a1.cos();
@@ -633,6 +683,7 @@ fn build_path(ctxt: &mut PathContext, cmd: char, args: &Vec<f64>,
                 let (xa2,ya2) = (xa2*rc - ya2*rs, xa2*rs + ya2*rc);
 
                 println!("Calculated: ({}, {})", xa2 -xa1, ya2-ya1);
+                */
                 segs.push(CurveSegment::Arc(rx as i64,ry as i64, a1,a2, rot));
                 
                 if rel {
@@ -656,7 +707,10 @@ fn build_path(ctxt: &mut PathContext, cmd: char, args: &Vec<f64>,
     Ok(())
 }
 
-pub fn parse_document<T: Read>(input :T,t0: &Transform) -> Result<Vec<CurveSegment>, String>
+pub fn parse_document<T: Read>(input :T,t0: &Transform,
+                                 filter: Box<Fn(&OwnedName,
+                                                &Vec<OwnedAttribute>) -> bool>)
+                                 -> Result<Vec<CurveSegment>, String>
 {
     let file = BufReader::new(input);
     let mut trans_stack = Vec::<Transform>::new();
@@ -666,8 +720,15 @@ pub fn parse_document<T: Read>(input :T,t0: &Transform) -> Result<Vec<CurveSegme
     let mut path_ctxt = PathContext {pos: Point {x: 0.0, y: 0.0},
                                      start: Point{x: 0.0, y: 0.0},
                                      last_control: None};
+    let mut ignore_nest = 0; // Ignore elements when > 0
     for e in parser {
         match e {
+            Ok(XmlEvent::StartElement { ref name, ref attributes, .. })
+                if ignore_nest > 0 || !filter(name, attributes)=>
+            {
+                ignore_nest += 1;
+            },
+            
             Ok(XmlEvent::StartElement { name, attributes, .. }) => {
                 if name.namespace == Some(SVG_NS.to_string()) {
                     trans_stack.push(transform);
@@ -675,9 +736,10 @@ pub fn parse_document<T: Read>(input :T,t0: &Transform) -> Result<Vec<CurveSegme
                     let mut view_box_rect: Option<[f64;4]> = None;
                     let mut width:Option<String> = None;
                     let mut height:Option<String> = None;
+                    // Parse attributes
                     for attr in &attributes {
                         if attr.name.local_name == "transform" {
-                            println!("Transform: '{}'", attr.value);
+                            //println!("Transform: '{}'", attr.value);
                             match parse_transform(&attr.value) {
                                 Ok(t) => {
                                     transform = transform * t;
@@ -705,7 +767,7 @@ pub fn parse_document<T: Read>(input :T,t0: &Transform) -> Result<Vec<CurveSegme
                             None => 
                                 return Err("path element has no d attribute".to_string()),
                             Some(d) => {
-                                println!("path: {}", d);
+                                //println!("path: {}", d);
                                 let mut pos = CompleteStr(&d);
                                 let mut first_elem = true;
                                 while let Ok((rest, (cmd, mut args))) = 
@@ -752,6 +814,10 @@ pub fn parse_document<T: Read>(input :T,t0: &Transform) -> Result<Vec<CurveSegme
                     }
                 }
             }
+            Ok(XmlEvent::EndElement { .. }) if ignore_nest > 0 => {
+                ignore_nest -= 1;
+            },
+            
             Ok(XmlEvent::EndElement { name }) => {
                 if name.namespace == Some(SVG_NS.to_string()) {
                     transform = trans_stack.pop().unwrap();

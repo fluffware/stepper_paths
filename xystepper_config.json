@@ -1,0 +1,23 @@
+{
+    "ticksPerSecond" : 128,
+    "stepperX":
+    {
+	"stepsPerMillimeter": 1966080,
+	"maxVelocity": 50,
+	"maxAcceleration": 500
+    },
+    "stepperY":
+    {
+	"stepsPerMillimeter": 1966080,
+	"maxVelocity": 50,
+	"maxAcceleration": 500
+    },
+    "laser":
+    {
+	"maxIntensity": 255,
+	"pwmPeriod": 256,
+	"alignmentIntensity": 5
+    }
+
+}
+

@@ -60,7 +60,7 @@ fn send_cmds<T>(serport: &mut T, t0:i64, events: &Vec<StepperEvent>)
     }
     
     serport.write(cmds.as_bytes()).unwrap();
-    println!("Cmds: {}", cmds);
+    //println!("Cmds: {}", cmds);
 }
 
 const TICKS_PER_SEC:i64 = 128;
@@ -71,7 +71,7 @@ pub fn play_events<T>(serport: &mut T, events: &Vec<StepperEvent>) -> io::Result
     let mut pending = Vec::<StepperEvent>::new();
     let mut ev_iter = events.into_iter();
     loop {
-        while pending.len() < 3 {
+        while pending.len() < 1 {
             match ev_iter.next() {
                 Some(e) =>
                     pending.push(e.clone()),

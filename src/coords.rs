@@ -59,7 +59,13 @@ impl std::ops::SubAssign<Point> for Point {
         self.y -= v.y;
     }
 }
-
+impl std::ops::Mul<f64> for Point {
+    type Output = Point;
+    fn mul(self, s: f64) -> Point {
+        Point { x: self.x * s,
+                y: self.y * s}
+    }
+}
 #[derive(Debug)]
 pub struct Transform {
     pub matrix : [f64;6]
