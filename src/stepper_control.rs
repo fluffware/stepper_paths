@@ -12,7 +12,7 @@ use std::io;
 use std::thread;
 use std::time;
 
-fn read_reply(inp: &mut Read) -> io::Result<String> {
+fn read_reply(inp: &mut dyn Read) -> io::Result<String> {
     let mut reply = String::new();
     let mut buf = [0u8;1];
     loop {

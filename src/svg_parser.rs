@@ -708,7 +708,7 @@ fn build_path(ctxt: &mut PathContext, cmd: char, args: &Vec<f64>,
 }
 
 pub fn parse_document<T: Read>(input :T,t0: &Transform,
-                                 filter: Box<Fn(&OwnedName,
+                                 filter: Box<dyn Fn(&OwnedName,
                                                 &Vec<OwnedAttribute>) -> bool>)
                                  -> Result<Vec<CurveSegment>, String>
 {

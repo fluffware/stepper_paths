@@ -130,7 +130,7 @@ impl DistancePath {
             }
             return s;
         }
-        let mut vflat_start = self.vflat;;
+        let mut vflat_start = self.vflat;
         let mut vflat_end = self.vflat;
         let mut t_step = 0;
         if self.t_adjust > 0 {

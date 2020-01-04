@@ -223,7 +223,7 @@ fn main() {
         Ok(file) => file,
         Err(e) => panic!("Failed to open {}: {}", file_name, e)
     };
-    let filter: Box<Fn(&OwnedName,
+    let filter: Box<dyn Fn(&OwnedName,
                        &std::vec::Vec<OwnedAttribute>) -> bool>;
     filter = match matches.opt_str("layer") {
         Some(layer_name) => {
