@@ -132,7 +132,7 @@ fn main() {
     };
    
     let ax_scale = vx_scale / config.ticks_per_second as f64;
-    let ay_scale = vx_scale / config.ticks_per_second as f64;
+    let ay_scale = vy_scale / config.ticks_per_second as f64;
     
     let ax_max = (ax_scale * config.stepper_x.max_acceleration).round() as i32;
     let ay_max = (ay_scale * config.stepper_y.max_acceleration).round() as i32;

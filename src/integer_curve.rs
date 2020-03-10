@@ -3,7 +3,7 @@ use num::Integer;
 use std::fmt;
 use multi_range::MultiRange;
 use std::i64;
-
+use std::convert::TryFrom;
 use acc_vector::AccSegment;
 use acc_vector::AccVector;
 
@@ -126,7 +126,7 @@ impl DistancePath {
                 assert!(self.v0 == self.vn);
             } else {
                 assert!((self.v0 - self.vn) <= a);
-                s.acc_push(1, (self.vn - self.v0) as i16);
+                s.acc_push(1, i16::try_from(self.vn - self.v0).unwrap());
             }
             return s;
         }
@@ -177,31 +177,34 @@ impl DistancePath {
         let t_flat = self.t_total - t1 - t4;
         // println!("a1: {}, a4: {}, t_flat: {}",a1,a4, t_flat);
         if dv1 == 0 {
-            s.acc_push(t1 as u16, a1 as i16);
+            s.acc_push(u16::try_from(t1).unwrap() , i16::try_from(a1).unwrap());
         } else {
-            s.acc_push((t1 - 1) as u16, a1 as i16);
-            s.acc_push(1, (vflat_start - (a1*(t1-1) + self.v0))  as i16);
+            s.acc_push(u16::try_from(t1 - 1).unwrap(),
+                       i16::try_from(a1).unwrap());
+            s.acc_push(1, i16::try_from(vflat_start - (a1*(t1-1) + self.v0)).unwrap());
         }
 
         
         assert!(self.t_adjust <= t_flat);
         if t_step > 0 {
-            s.acc_push((t_step-1) as u16, 0);
-            s.acc_push(1, (vflat_end - vflat_start) as i16);
-            s.acc_push((t_flat - t_step) as u16, 0);
+            s.acc_push(u16::try_from(t_step-1).unwrap(), 0);
+            s.acc_push(1, i16::try_from(vflat_end - vflat_start).unwrap());
+            s.acc_push(u16::try_from(t_flat - t_step).unwrap(), 0);
         } else if t_step < 0 {
-            s.acc_push((t_flat + t_step) as u16, 0);
-            s.acc_push(1, (vflat_end - vflat_start) as i16);
-            s.acc_push((-t_step - 1) as u16, 0);
+            s.acc_push(u16::try_from(t_flat + t_step).unwrap(), 0);
+            s.acc_push(1, i16::try_from(vflat_end - vflat_start).unwrap());
+            s.acc_push(u16::try_from(-t_step - 1).unwrap(), 0);
         } else {
-            s.acc_push(t_flat as u16, 0);
+            s.acc_push(u16::try_from(t_flat).unwrap(), 0);
         }
 
         if dv4 == 0 {
-            s.acc_push(t4 as u16, a4 as i16);
+            s.acc_push(u16::try_from(t4).unwrap(), i16::try_from(a4).unwrap());
         } else {
-            s.acc_push(1, ((self.vn - a4*(t4-1)) - vflat_end) as i16);
-            s.acc_push((t4 - 1) as u16, a4 as i16);
+            s.acc_push(1, i16::try_from((self.vn - a4*(t4-1)) -
+                                        vflat_end).unwrap());
+            s.acc_push(u16::try_from(t4 - 1).unwrap() ,
+                       i16::try_from(a4).unwrap());
         }
         return s;
     }
@@ -492,14 +495,16 @@ pub fn shortest_curve_sequences(limits: &[PathLimits]) -> Vec<Vec<AccSegment>>
     let mut r = MultiRange::new();
     r.or(i64::MIN, i64::MAX);
     for l in limits {
-        r = r.and_range(&shortest_curve_length(l.ds,l.v0 as i64,l.vn as i64,
-                                               l.a as i64,l.vmax as i64));
+        r = r.and_range(&shortest_curve_length(l.ds,i64::from(l.v0),
+                                               i64::from(l.vn),
+                                               i64::from(l.a),
+                                               i64::from(l.vmax)));
     }
     let (t,_) = r.bounds().unwrap();
     let mut a: Vec<Vec<AccSegment>> = Vec::new();
     for l in limits {
-        let path = adjust_curve(t, l.ds,l.v0 as i64,l.vn as i64,
-                                l.a as i64);
+        let path = adjust_curve(t, l.ds,i64::from(l.v0),i64::from(l.vn),
+                                i64::from(l.a));
         a.push(path.acc_seq());
     }
     a
@@ -623,12 +628,12 @@ fn test_acc_sequence()
             for &AccSegment{interval: l,acc: a} in &seq {
                 assert!(l > 0);
                 let vp = v;
-                v += l as i64 * a as i64;
-                s += (vp + v) * l as i64;
+                v += i64::from(l) * i64::from(a);
+                s += (vp + v) * i64::from(l);
             }
             println!("{} => {:?} => {}", path, seq,v);
             assert_eq!(s, path_distance(v0,vn, path.vflat, a, path.t_total));
-            assert_eq!(s, seq.acc_distance(v0 as i32).0);
+            assert_eq!(s, seq.acc_distance(i32::from(v0)).0);
         }
     }
 }
@@ -671,7 +676,7 @@ fn check_shortest_curve(ds:i64, v0: i64, vn: i64, a: i64, vmax: i64)
     }
     let seq = path.acc_seq();
     println!("{} => {:?} => {}", path, seq,vn);
-    assert_eq!(path.distance(), seq.acc_distance(v0 as i32).0);
+    assert_eq!(path.distance(), seq.acc_distance(i32::from(v0)).0);
 
 }
 
