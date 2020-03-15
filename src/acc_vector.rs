@@ -1,9 +1,12 @@
 use std::slice;
 use std::fmt;
 
+/// Acceleration for a given number of steps
 pub struct AccSegment
 {
+    /// Number of steps to accelerate for
     pub interval:u16,
+    /// Acceleration
     pub acc:i16
 }
 

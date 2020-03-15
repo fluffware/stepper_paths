@@ -24,20 +24,36 @@ fn max_i64(a:i64, b:i64) ->i64
 //   /   \vn
 //v0/     
 
-// See DistancePath.asy for a graphical discription
+/// A compact description of an acceleration sequence dasigned to move
+/// a certain distance.
+///
+/// See DistancePath.asy for a graphical description
 #[derive(Clone)]
 pub struct DistancePath {
-    pub v0: i64, // Start speed
-    pub vn: i64, // End speed
-    pub amax:i64, // Maximum acceleration
-    pub vflat:i64, // Flat part of speed curve, may be between v0 and vn
-    pub t_total:i64, // Total time for path
-    pub t_adjust: i64, // Adjust the flat part of the curve so that the speed is increased or decreased by one. The sign decides the direction and the absolute value is the length
+    /// Start velocity
+    pub v0: i64,
+    /// End velocity
+    pub vn: i64,
+    /// Maximum acceleration
+    pub amax:i64,
+    /// Flat part of speed curve, may be between `v0` and `vn`
+    pub vflat:i64,
+    /// Total time for path
+    pub t_total:i64,
+    /// Adjust the flat part of the curve so that the speed is
+    /// increased or decreased by one. The sign decides the direction
+    /// and the absolute value is the length.
+    pub t_adjust: i64, 
 }
 
-/* Split acceleration into max acceleration time and adjustment step.
-There is always an adjustment step in the range from -max_acc to +max_acc .
- */
+/// Split acceleration into max acceleration time and adjustment step.
+///
+/// There is always an adjustment step in the range from -`max_acc` to
+/// +`max_acc` .
+/// # Arguments
+/// * `v_diff` - Velocity difference
+/// * `max_acc` - Maximum allowed acceleration. Positive.
+
 pub fn split_acc(v_diff: i64, max_acc: i64) -> (i64, i64) {
     if v_diff > 0 {
             let dr = (v_diff-1).div_rem(&max_acc);
@@ -112,11 +128,15 @@ impl DistancePath {
         s
     }
      */
+
+    /// Returns the distance moved by this path
     pub fn distance(&self) -> i64 {
         return path_distance(self.v0, self.vn, self.vflat, 
                              self.amax, self.t_total)
             + 2*self.t_adjust;
     }
+
+    /// Returns an acceleration sequence corresponding to this path
     pub fn acc_seq(&self) -> Vec<AccSegment>
     {
         let a = self.amax;
@@ -221,11 +241,17 @@ impl fmt::Display for DistancePath {
     }
 }
 
-    
-// ->(n,a)
+/// Returns the possible lengths of acceleration curves that will
+/// move the desired distance, only considering maximum acceleration.
+///
+/// # Arguments
+/// * `ds` - The distance to move
+/// * `v0` - Velocity at the beginning of the curve
+/// * `vn` - Desired velocity at the end of the curve
+/// * `a` - Maximum allowed acceleration
+
 pub fn max_acceleration_curve(ds:i64, v0: i64, vn: i64, a: i64) -> MultiRange<i64>
 {
-    let mut r = MultiRange::<i64>::new();
     let tmin = 
         if v0 != vn {
             ((v0-vn).abs() + a - 1) / a
@@ -243,8 +269,7 @@ pub fn max_acceleration_curve(ds:i64, v0: i64, vn: i64, a: i64) -> MultiRange<i6
     //println!("cx2: {}, cx: {}, c: {}", cx2,cx,c);
     let s = c + (v0 + vn)*(v0 + vn);
     if s < 0 { // No solution
-        r.or(tmin, i64::MAX);
-        return r;
+        return MultiRange::<i64>::range(tmin, i64::MAX);
     }
     // Find minima
     let xmin =
@@ -267,6 +292,7 @@ pub fn max_acceleration_curve(ds:i64, v0: i64, vn: i64, a: i64) -> MultiRange<i6
         limit *= 2;
     }
     limit += 1;
+    let mut r = MultiRange::<i64>::new();
     match (solve::find_root(cx2,cx,c, xmin - limit, xmin), 
            solve::find_root(cx2,cx,c, xmin, xmin + limit)) {
         (Some(min), Some(max)) => {
@@ -281,6 +307,16 @@ pub fn max_acceleration_curve(ds:i64, v0: i64, vn: i64, a: i64) -> MultiRange<i6
 
 
 
+/// Returns the possible lengths of acceleration curves that will move
+/// the desired distance.  This function assumes that `vmax` is
+/// reached while moving distance `ds`, if not an empty sequence is
+/// returned.
+/// # Arguments
+/// * `ds` - The distance to move
+/// * `v0` - Velocity at the beginning of the curve
+/// * `vn` - Desired velocity at the end of the curve
+/// * `a` - Maximum allowed acceleration
+/// * `vmax` - Maximum allowed speed
 
 pub fn speed_limited_curve(ds:i64, v0: i64, vn: i64, a: i64, vmax:i64) -> MultiRange<i64>
 {
@@ -296,9 +332,9 @@ pub fn speed_limited_curve(ds:i64, v0: i64, vn: i64, a: i64, vmax:i64) -> MultiR
     return r;
 }
 
-// Divide and round away from zero with remainder.
-// If result is (q,r) then b * q + r = a
-// b > 0
+/// Divide and round away from zero with remainder.
+/// If result is (q,r) then b * q + r = a .
+/// `b` > 0
 fn div_rem_away(a:i64,b:i64) -> (i64, i64)
 {
     assert!(b > 0);
@@ -460,6 +496,16 @@ fn adjust_curve(t_total: i64, ds: i64,v0: i64, vn: i64, a: i64) -> DistancePath
                          t_adjust: t_adjust, t_total: t_total};
 }
 
+/// Returns the possible lengths of acceleration curves that will
+/// move the desired distance
+///
+/// # Arguments
+/// * `ds` - The distance to move
+/// * `v0` - Velocity at the beginning of the curve
+/// * `vn` - Desired velocity at the end of the curve
+/// * `a` - Maximum allowed acceleration
+/// * `vmax` - Maximum allowed speed
+
 pub fn shortest_curve_length(ds:i64, v0: i64, vn: i64, a: i64, vmax:i64) 
                              -> MultiRange<i64>
 {
@@ -474,22 +520,52 @@ pub fn shortest_curve_length(ds:i64, v0: i64, vn: i64, a: i64, vmax:i64)
     return pos.and_range(&neg);
 }
 
+
+/// Find the shortest acceleration sequence that will move a given distance.
+///
+/// The sequence starts at velocity `v0` and ends at `vn`, not
+/// accelerating more than `a`.
+/// # Arguments
+/// * `ds` - The distance to move
+/// * `v0` - Velocity at the beginning of the curve
+/// * `vn` - Desired velocity at the end of the curve
+/// * `a` - Maximum allowed acceleration
+/// * `vmax` - Maximum allowed speed
+
 pub fn shortest_curve(ds:i64, v0: i64, vn: i64, a: i64, vmax:i64) -> DistancePath
 {
     let (t,_) = shortest_curve_length(ds,v0,vn,a,vmax).bounds().unwrap();
     return adjust_curve(t, ds, v0, vn, a);
 }
 
+/// Describes the constraints for an acceleration curve
 #[derive(Debug)]
 pub struct PathLimits
 {
-    pub ds:i64, 
+    /// Distance
+    pub ds:i64,
+    /// Start velocity
     pub v0: i32,
-    pub vn: i32, 
-    pub a: i32, 
+    /// End velocity
+    pub vn: i32,
+    /// Max acceleration
+    pub a: i32,
+    /// Max speed
     pub vmax:i32
 }
-    
+
+/// Find the shortest acceleration sequence that will move a given
+/// distance for a set of movements.
+///
+/// The sequence starts at velocity `v0` and ends at `vn`, not
+/// accelerating more than `a`.
+///
+/// Returns an acceleration sequence for each movement. All sequences
+/// has the same length.
+///
+/// # Arguments
+/// * `limit` - Constraints for each movement
+
 pub fn shortest_curve_sequences(limits: &[PathLimits]) -> Vec<Vec<AccSegment>>
 {
     let mut r = MultiRange::new();
@@ -633,7 +709,7 @@ fn test_acc_sequence()
             }
             println!("{} => {:?} => {}", path, seq,v);
             assert_eq!(s, path_distance(v0,vn, path.vflat, a, path.t_total));
-            assert_eq!(s, seq.acc_distance(i32::from(v0)).0);
+            assert_eq!(s, seq.acc_distance(i32::try_from(v0).unwrap()).0);
         }
     }
 }
@@ -676,7 +752,7 @@ fn check_shortest_curve(ds:i64, v0: i64, vn: i64, a: i64, vmax: i64)
     }
     let seq = path.acc_seq();
     println!("{} => {:?} => {}", path, seq,vn);
-    assert_eq!(path.distance(), seq.acc_distance(i32::from(v0)).0);
+    assert_eq!(path.distance(), seq.acc_distance(i32::try_from(v0).unwrap()).0);
 
 }
 

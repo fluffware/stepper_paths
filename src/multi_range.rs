@@ -2,6 +2,7 @@ use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::fmt::Error;
 
+/// A single range segment
 #[derive(PartialEq)]
 struct Range<T:Sized+PartialOrd>
 {
@@ -23,6 +24,7 @@ fn max<T:PartialOrd>(a:T, b:T) -> T {
     if a > b {a} else {b}
 }
 
+/// An ordered sequence of disjoint ranges
 #[derive(PartialEq)]
 pub struct MultiRange<T:Sized+PartialOrd>
 {
@@ -31,15 +33,28 @@ pub struct MultiRange<T:Sized+PartialOrd>
 
 impl<T:Sized+PartialOrd+Copy+Debug> MultiRange<T>
 {
+
+    /// Returns an empty sequence
     pub fn new() -> MultiRange<T>
     {
         MultiRange {ranges: Vec::new()}
     }
 
+    /// Returns a sequence with one range
+    ///
+    /// # Arguments
+    /// * `low` - Low limit of range, inclusive
+    /// * `high` - High limit of range, exclusive
+    
     pub fn range(low: T, high: T) -> MultiRange<T>{
         MultiRange {ranges: vec![Range::<T> {low: low, high: high}]}
     }
 
+    /// Add a slice of ranges
+    ///
+    /// # Arguments
+    /// * `a` - Slice containing (low, high) tuples
+    
     pub fn or_slice(&mut self, a:&[(T,T)]) ->  &mut Self
     {
         for &(low,high) in a {
@@ -47,6 +62,12 @@ impl<T:Sized+PartialOrd+Copy+Debug> MultiRange<T>
         }
         self
     }
+
+    /// Add a single range
+    ///
+    /// # Arguments
+    /// * `low` - Low limit of range, inclusive
+    /// * `high` - High limit of range, exclusive
     
     pub fn or(&mut self, low: T, high: T) -> &mut Self
     {
@@ -78,6 +99,13 @@ impl<T:Sized+PartialOrd+Copy+Debug> MultiRange<T>
         self
     }
 
+    /// Intersect with range.
+    /// Returns ranges or parts of ranges between `low` and `high`.
+    ///
+    /// # Arguments
+    /// * `low` - Prune ranges lower than this
+    /// * `high` - Prune ranges greater or equal to this
+    
     pub fn and(&self, low: T, high: T) -> Self
     {
         let mut res = MultiRange::new();
@@ -99,7 +127,12 @@ impl<T:Sized+PartialOrd+Copy+Debug> MultiRange<T>
         return res;
             
     }
-    
+    /// Intersect with multi range.
+    /// Returns ranges that's part of both `self` and `other`
+    ///
+    /// # Arguments
+    /// * `other` - `MultiRange` to intersect with.
+
     pub fn and_range(&self, other: &Self) -> Self
     {
         let mut r2_iter = other.ranges.iter().peekable();
@@ -140,12 +173,16 @@ impl<T:Sized+PartialOrd+Copy+Debug> MultiRange<T>
         }
        res
     }
-                   
+
+    /// Returns true if there are no ranges in the sequence.
+    
     pub fn empty(&self) -> bool
     {
         self.ranges.len() == 0
     }
 
+    /// Returns lowest and highest limits of the sequence
+    
     pub fn bounds(&self) -> Option<(T,T)>
     {
         match (self.ranges.first(), self.ranges.last()) {
