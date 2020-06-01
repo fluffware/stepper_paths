@@ -111,18 +111,18 @@ fn main() {
 
     let vx_scale = config.stepper_x.steps_per_millimeter
         / (2 * config.ticks_per_second) as f64;
-    let vx_max = (vx_scale * config.stepper_x.max_velocity).round() as i32;
+    let mut vx_max = (vx_scale * config.stepper_x.max_velocity).round() as i32;
 
     let vy_scale = config.stepper_y.steps_per_millimeter
         / (2 * config.ticks_per_second) as f64;
-    let vy_max = (vy_scale * config.stepper_y.max_velocity).round() as i32;
-
-    let v_scale = vx_scale.min(vy_scale);
+    let mut vy_max = (vy_scale * config.stepper_y.max_velocity).round() as i32;
     
-    let mut v_max : i32 = std::cmp::min(vx_max, vy_max); 
     match matches.opt_str("v-max") {
         Some(arg) => match f64::from_str(&arg) {
-            Ok(value) => v_max = (v_scale * value) as i32,
+            Ok(value) => {
+                vx_max = (vx_scale * value) as i32;
+                vy_max = (vy_scale * value) as i32;
+            },
             Err(err) => {
                 println!("Invalid max velocity: {}", err);
                 return
@@ -134,13 +134,17 @@ fn main() {
     let ax_scale = vx_scale / config.ticks_per_second as f64;
     let ay_scale = vy_scale / config.ticks_per_second as f64;
     
-    let ax_max = (ax_scale * config.stepper_x.max_acceleration).round() as i32;
-    let ay_max = (ay_scale * config.stepper_y.max_acceleration).round() as i32;
-    let mut a_max = std::cmp::min(ax_max, ay_max);
-    let a_scale = ax_scale.min(ay_scale);
+    let mut ax_max =
+        (ax_scale * config.stepper_x.max_acceleration).round() as i32;
+    let mut ay_max =
+        (ay_scale * config.stepper_y.max_acceleration).round() as i32;
+    
     match matches.opt_str("a-max") {
         Some(arg) => match f64::from_str(&arg) {
-            Ok(value) => a_max = (value * a_scale) as i32 ,
+            Ok(value) => {
+                ax_max = (value * ax_scale) as i32;
+                ay_max = (value * ay_scale) as i32;
+            },
             Err(err) => {
                 println!("Invalid max acceleration: {}", err);
                 return
@@ -150,7 +154,7 @@ fn main() {
     };
 
     
-    let v_draw = (v_scale * match matches.opt_str("draw-speed") {
+    let v_draw = match matches.opt_str("draw-speed") {
         Some(arg) => match f64::from_str(&arg) {
             Ok(value) => value,
             Err(err) => {
@@ -159,7 +163,7 @@ fn main() {
             }
         },
         None => 20.0
-    }) as i32;
+    };
 
     let n_repeat = match matches.opt_str("repeat") {
         Some(arg) => match u32::from_str_radix(&arg, 10) {            
@@ -216,7 +220,11 @@ fn main() {
         };
  
    
-    let mut ctxt = StepperContext::new(a_max, v_max);
+    let mut ctxt = StepperContext::new(&[ax_max, ay_max],
+                                       &[vx_max, vy_max],
+                                       &[config.stepper_x.steps_per_millimeter,
+                                         config.stepper_y.steps_per_millimeter],
+                                       &[vx_scale, vy_scale]);
     ctxt.set_weight(weight);
     
     let file = match File::open(&file_name) {
@@ -279,7 +287,7 @@ fn main() {
     }
                 
     println!("Pos: {:?}",ctxt.position());
-    ctxt.goto(0,0);
+    ctxt.step_goto(0,0);
     if let Some(mut serport) = serport {
         let events = ctxt.events();
         

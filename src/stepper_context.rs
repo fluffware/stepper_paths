@@ -2,24 +2,24 @@ use acc_vector::AccSegment;
 use acc_vector::AccVector;
 use integer_curve::PathLimits;
 use integer_curve;
-use bezier;
+//use bezier;
 use num::Integer;
 use std::u64;
-
-
-
+//use std::convert::TryFrom;
+use curve_approx::CurveInfo;
+use std::f64::consts::PI;
 
 #[derive(Debug)]
 pub enum CurveSegment
 {
-    GoTo(i64, i64), // x,y
-    GoToRel(i64, i64), // x,y
-    LineTo(i64, i64), // x,y
-    LineToRel(i64, i64), // x,y
+    GoTo(f64, f64), // x,y
+    GoToRel(f64, f64), // x,y
+    LineTo(f64, f64), // x,y
+    LineToRel(f64, f64), // x,y
     // Control points are relative to the closest end point
-    CurveTo(i64, i64, i64, i64, i64, i64), // x,y, c1x, c1y, c2x, c2y
-    CurveToRel(i64, i64, i64, i64, i64, i64), // x,y, c1x, c1y, c2x, c2y
-    Arc(i64, i64, f64, f64, f64) // rx,ry, start, end, rotation
+    CurveTo(f64, f64, f64, f64, f64, f64), // x,y, c1x, c1y, c2x, c2y
+    CurveToRel(f64, f64, f64, f64, f64, f64), // x,y, c1x, c1y, c2x, c2y
+    Arc(f64, f64, f64, f64, f64) // rx,ry, start, end, rotation
 
 }
 
@@ -42,26 +42,36 @@ const N_CHANNELS : usize = 2;
 const X_INDEX : usize = 0;
 const Y_INDEX : usize = 1;
 
+/// State for a single channel (stepper)
 #[derive(Copy, Clone, Debug)]
 pub struct ChannelContext
 {
-    pos : i64,
-    v : i32,
-    ticks : u64 // Tick so far in this channel
+    pos : i64,  // Position in steps
+    v : i32, // steps/(2*tick)
+    ticks : u64 // Ticks so far in this channel
 }
 
+/// State for curve generation
 #[derive(Debug)]
 pub struct StepperContext
 {
-    channels : [ChannelContext; N_CHANNELS],
-    a_max : i32,
-    v_max : i32,
+    /// State for each channel
+    channels: [ChannelContext; N_CHANNELS],
+    /// Maximum acceleration for each channel
+    step_a_max: [i32; N_CHANNELS],
+    /// Maximum speed for each channel
+    step_v_max: [i32; N_CHANNELS],
 
-    events : Vec<StepperEvent>,
-    event_ticks :u64, // Time of last event
+    events: Vec<StepperEvent>,
+    event_ticks: u64, // Time of last event
 
-    move_weight :i32,
-    curve_weight :i32
+    move_weight: i32,
+    curve_weight: i32,
+
+    /// Conversion factor for coordinates in curves to steps
+    step_scale: [f64; N_CHANNELS],
+    /// Conversion factor for velocity in curves (units/s) to steps (steps/(2*tick))
+    v_scale: [f64; N_CHANNELS],
 }
 
 // Returns (vx, vy)
@@ -98,16 +108,96 @@ fn velocity_matches(v1x:f64, v1y:f64, v2x:f64, v2y:f64,
     }
 }
 
+struct Line
+{
+    x: f64,
+    y: f64,
+    dir: [f64;2]
+}
+
+impl Line
+{
+    pub fn new( x: f64, y: f64) -> Line
+    {
+        let l = (x*x + y*y).sqrt();
+        Line{x,y, dir: [x/l, y/l]}
+    }
+}
+impl CurveInfo for Line
+{
+    fn length(&self) -> f64
+    {
+        (self.x*self.x + self.y*self.y).sqrt()
+    }
+    fn value(&self, pos: f64) -> ([f64;2], [f64;2])
+    {
+        ([self.x*pos, self.y*pos], self.dir)
+    }
+}
+
+struct Ellipse
+{
+    rx: f64,
+    ry: f64,
+    start: f64,
+    arc: f64,
+    rotation: f64,
+    x0: f64,
+    y0: f64
+}
+impl Ellipse
+{
+    pub fn new(rx: f64,
+               ry: f64,
+               start: f64,
+               end: f64,
+               rotation: f64) -> Ellipse
+    {
+        if rx != ry {
+            panic!("Non circular ellipses not supported");
+            // TODO
+        }
+        let mut arc = end - start;
+        if arc <= 0.0 {
+            arc += PI;
+        }
+        let (s, c) = start.sin_cos();
+        let x0 = -c * rx;
+        let y0 = -s * ry;
+        Ellipse{rx, ry, start, arc, rotation, x0, y0}
+    }
+}
+
+impl CurveInfo for Ellipse
+{
+    fn length(&self) -> f64
+    {
+        self.rx * self.arc
+    }
+    
+    fn value(&self, pos: f64) -> ([f64;2], [f64;2])
+    {
+        let (s, c) = (self.start + self.arc * pos).sin_cos();
+        ([self.x0 + c * self.rx, self.y0 + s * self.ry], [-s, c])
+    }
+}
+
+
+
 impl StepperContext {
-    pub fn new(a_max: i32, v_max: i32) -> StepperContext
+    pub fn new(a_max: &[i32;N_CHANNELS], v_max: &[i32;N_CHANNELS],
+               step_scale: &[f64;N_CHANNELS],  v_scale: &[f64;N_CHANNELS])
+               -> StepperContext
     {
         StepperContext {channels: [ChannelContext {pos:0,v:0,ticks:0} ; 
                                    N_CHANNELS] ,
-                        a_max: a_max, v_max: v_max,
+                        step_a_max: *a_max, step_v_max: *v_max,
                         events: Vec::<StepperEvent>::new(),
                         event_ticks : 0,
                         move_weight: 0,
-                        curve_weight: 255
+                        curve_weight: 255,
+                        step_scale: *step_scale,
+                        v_scale: *v_scale
         }
     }
 
@@ -213,12 +303,32 @@ impl StepperContext {
         (s, v)
     }
    
-*/
-    
-    pub fn goto_speed(&mut self, x: i64, y: i64, vx: i32, vy:i32)
+     */
+
+    fn to_steps(&self, coord: f64, channel: usize) -> i64
     {
-        assert!((self.v_max as i64) * (self.v_max as i64) * 11 / 10
-                >= (vx as i64) * (vx as i64) + (vy as i64) * (vy as i64));
+        let s = (coord*self.step_scale[channel]).round();
+        assert!(s < (i64::max_value() as f64)
+                && s > (i64::min_value() as f64),
+                "Step coordinate out of range");
+        s as i64
+    }
+    
+    fn to_step_v(&self, v: f64, channel: usize) -> i32
+    {
+        let s = (v * self.v_scale[channel]).round();
+        assert!(s < (i32::max_value() as f64)
+                && s > (i32::min_value() as f64),
+                "Step coordinate out of range");
+        s as i32
+    }
+
+    
+    /// Goto a position given as steps, with given final velocity
+    pub fn step_goto_speed(&mut self, x: i64, y: i64, vx: i32, vy:i32)
+    {
+        assert!(self.step_v_max[X_INDEX] >= vx);
+        assert!(self.step_v_max[Y_INDEX] >= vy);
         self.events.push(StepperEvent {
             ticks: (self.channels[X_INDEX].ticks-self.event_ticks) as u32,
             cmd: Command::Weight(self.move_weight)
@@ -227,10 +337,13 @@ impl StepperContext {
         
         let limits = &[PathLimits {ds: x - self.channels[X_INDEX].pos,
                                    v0: self.channels[X_INDEX].v, vn: vx, 
-                                   a: self.a_max, vmax: self.v_max},
+                                   a: self.step_a_max[X_INDEX], 
+                                   vmax: self.step_v_max[X_INDEX]},
                        PathLimits {ds: y - self.channels[Y_INDEX].pos,
                                    v0: self.channels[Y_INDEX].v, vn: vy, 
-                                   a: self.a_max, vmax: self.v_max}];
+                                   a: self.step_a_max[Y_INDEX],
+                                   vmax: self.step_v_max[Y_INDEX]}
+        ];
         //println!("limits: {:?}", *limits);
         let seq = integer_curve::shortest_curve_sequences(limits);
         let v_end = [vx,vy];
@@ -251,74 +364,121 @@ impl StepperContext {
          */
     }
     
-    pub fn goto(&mut self, x: i64, y: i64)
+    pub fn step_goto(&mut self, x: i64, y: i64)
     {
-        self.goto_speed(x,y,0,0)
+        self.step_goto_speed(x,y,0,0)
+    }
+
+    
+    pub fn goto_speed(&mut self, x: f64, y: f64, vx: f64, vy:f64)
+    {
+        self.step_goto_speed(self.to_steps(x, X_INDEX),
+                             self.to_steps(y, Y_INDEX), 
+                             self.to_step_v(vx, X_INDEX),
+                             self.to_step_v(vy, Y_INDEX));
     }
     
-    pub fn speed(&mut self, v_x: i32, v_y: i32) {
-        let v = [v_x, v_y];
+     pub fn goto(&mut self, x: f64, y: f64)
+    {
+        self.step_goto_speed(self.to_steps(x, X_INDEX),
+                             self.to_steps(y, Y_INDEX),
+                             0,0)
+    }
+
+    pub fn speed(&mut self, v_x: f64, v_y: f64) {
+        let v = [self.to_step_v(v_x,X_INDEX), self.to_step_v(v_y,Y_INDEX)];
         let mut acc = [Vec::<AccSegment>::new(), Vec::<AccSegment>::new()];
         for i in 0..N_CHANNELS {
-            let (t,dt) = (v[i] - self.channels[i].v).div_rem(&self.a_max);
+            let (t,dt) = 
+                (v[i] - self.channels[i].v).div_rem(&self.step_a_max[i]);
             let a = if v[i] >= self.channels[i].v {
-                self.a_max
+                self.step_a_max[i]
             } else {
-                -self.a_max
+                -self.step_a_max[i]
             };
             acc[i].push(AccSegment {interval: t.abs() as u16, 
                                     acc: a as i16});
             self.channels[i].pos += 
-                ((2*self.channels[i].v + self.a_max * t) * t.abs()) as i64;
+                ((2*self.channels[i].v + self.step_a_max[i] * t) * t.abs())
+                as i64;
             if dt != 0 {
                 acc[i].push(AccSegment {interval: 1, acc: dt as i16});
                 self.channels[i].pos += (self.channels[i].v 
-                                         + self.a_max * t + v[i]) as i64;
+                                         + self.step_a_max[i] * t + v[i])
+                    as i64;
             }
             self.channels[i].v = v[i]; 
         }
         self.acc_segs_to_events(&acc);
     }
 
-   
+    
+    pub fn approx_curve(&mut self, curve: &dyn CurveInfo, v: f64)
+    {
+        let len = curve.length();
+        let steps = (len/v).round();
+        let step_len = 1.0 / steps;
+        let s0 = [self.channels[X_INDEX].pos, self.channels[Y_INDEX].pos];
+        for t in 1..(steps as i32 + 1) {
+            let p = (t as f64) * step_len;
+            let (pos,dir) = curve.value(p);
+            let mut acc = [0i16;N_CHANNELS];
+            println!("p: {} pos: {:?} ",p, pos);
+            for d in 0..N_CHANNELS {
+                let step_v = dir[d] * v * self.v_scale[d];
+                let step_pos = pos[d] * self.step_scale[d];
+                // Acceleration for correct position
+                let a_pos =
+                    step_pos - ((self.channels[d].pos - s0[d])
+                                + 2* self.channels[d].v as i64) as f64;
+                // Acceleration for correct speed
+                let a_v = step_v - self.channels[d].v as f64;
+                println!("a_pos: {} a_v: {}", a_pos, a_v);
+                acc[d] = ((a_v + a_pos) / 2.0).round() as i16;
+            }
+            self.add_acc_interval(acc[X_INDEX], acc[Y_INDEX], 1);
+            println!("channel: {:?} ", self.channels);
+        }
+    }
     
     /* Bezier curve from current position to (p2x, p2y).  Control
     points are relative to their closest endpoint. Traverses the curve
     at the given speed. */
     
-    pub fn curve_to(&mut self, c1x:i64,c1y:i64, c2x:i64, c2y:i64, 
-                    p2x:i64,p2y:i64, v: i32)
-    {
-        let v = v as f64;
-        let x0 = self.channels[X_INDEX].pos;
-        let y0 = self.channels[Y_INDEX].pos;
+    pub fn curve_to(&mut self, c1x:f64,c1y:f64, c2x:f64, c2y:f64, 
+                    p2x:f64,p2y:f64, v: f64)
+        {
+            /*
+        let x0 = self.channels[X_INDEX].pos as f64;
+        let y0 = self.channels[Y_INDEX].pos as f64;
         
-        let dist = ((c1x*c1x + c1y*c1y) as f64).sqrt();
-        let scale = if dist < 0.1 {0.0} else {v / dist};
-        let vx = ((c1x as f64) * scale).round() as i32;
-        let vy = ((c1y as f64) * scale).round() as i32;
+        let dist = (c1x*c1x + c1y*c1y).sqrt();
+        let scale = if dist < 0.0001 {0.0} else {v / dist};
+        let vx = c1x * scale;
+        let vy = c1y * scale;
 
         /*println!("In: ({},{}) Out: ({},{})", 
                 self.channels[X_INDEX].v, self.channels[Y_INDEX].v,
                 vx, vy);*/
 
+        let v0x = self.channels[X_INDEX].v as f64;
+        let v0y = self.channels[Y_INDEX].v as f64;
         // Adjust velocities if difference is too big
-        if !velocity_matches(self.channels[X_INDEX].v as f64,
-                             self.channels[Y_INDEX].v as f64,
-                             vx as f64, vy as f64,
+        if !velocity_matches(v0x, v0y,
+                             vx, vy,
                              ANGLE_SIN_LIMIT,
                              SPEED_REL_LIMIT) {
             self.goto_speed(x0, y0, vx, vy);
         }
         
         self.events.push(StepperEvent {
-            ticks: (self.channels[X_INDEX].ticks-self.event_ticks) as u32,
+            ticks: u32::try_from(self.channels[X_INDEX].ticks-self.event_ticks).unwrap(),
             cmd: Command::Weight(self.curve_weight)
         });
         self.event_ticks = self.channels[X_INDEX].ticks;
         
-        let x0 = self.channels[X_INDEX].pos;
-        let y0 = self.channels[Y_INDEX].pos;
+        let x0 = self.channels[X_INDEX].pos as f64;
+        let y0 = self.channels[Y_INDEX].pos as f64;
         
         let px = [x0 as f64, 
                   (x0 + c1x) as f64, 
@@ -330,7 +490,7 @@ impl StepperContext {
         let mut acc = [Vec::<AccSegment>::new(), Vec::<AccSegment>::new()];
         let mut dvx = self.channels[X_INDEX].v; 
         let mut dvy = self.channels[Y_INDEX].v;
-        
+        /*
         let (x,y) = {
             let mut cb = |ax,ay|
             {
@@ -363,7 +523,7 @@ impl StepperContext {
             
         }
                        
-            
+           
         
     /*println!("D: ({}, {})", x - self.channels[X_INDEX].pos,
                  y - self.channels[Y_INDEX].pos);             */
@@ -382,14 +542,17 @@ impl StepperContext {
         let (s,v) = self.event_distance(self.channels[X_INDEX].ticks);
         println!("s={:?}, v={:?}", s,v);
          */
+         */
+             */
     }
     
     fn rotate(x:f64, y:f64, sin:f64, cos:f64) -> (f64,f64)
     {
         (x*cos - y *sin, x*sin + y*cos)
     }
-    pub fn arc_to(&mut self, rx:i64,ry:i64, start:f64, end:f64, rot:f64, v: i32)
-    {
+    pub fn arc_to(&mut self, rx:f64,ry:f64, start:f64, end:f64, rot:f64, v: f32)
+        {
+            /*
         const ERR_WEIGHT:f64 = 0.2;
         let x0 = self.channels[X_INDEX].pos;
         let y0 = self.channels[Y_INDEX].pos;
@@ -480,6 +643,7 @@ impl StepperContext {
             panic!("Non circular ellipses not supported");
             // TODO
         }
+             */
     }
     
     pub fn set_weight(&mut self, weight: i32)
@@ -489,8 +653,9 @@ impl StepperContext {
 
 
     
-    pub fn draw_curves(&mut self, segs: &[CurveSegment], v: i32)
-    {
+    pub fn draw_curves(&mut self, segs: &[CurveSegment], v: f64)
+        {
+            /*
         let mut iter = segs.iter();
         let mut seg =
             match iter.next() {
@@ -519,7 +684,7 @@ impl StepperContext {
             
             let next_seg = iter.next();
             //println!("({},{}) -> ({},{})", x0,y0, end_x, end_y);
-            // Skip zero length gotos and lines */
+            // Skip zero length gotos and lines
             if match *seg {
                 // Curves may start and end in the same point as they start
                 CurveSegment::CurveTo(_,_,_,_,_,_) => true,
@@ -622,6 +787,7 @@ impl StepperContext {
                 break;
             }
         }
+        */
         
     }
 
@@ -662,4 +828,30 @@ impl StepperContext {
         }
         &self.events
     }
+}
+
+#[test]
+fn test_approx_curve_line()
+{
+    let mut ctxt = StepperContext::new(&[10, 10],
+                                       &[10, 10],
+                                       &[3.0, 7.0],
+                                       &[1.5, 3.5]);
+
+    let line = Line::new(23.0,45.0);
+    ctxt.approx_curve(&line, 1.0);
+
+}
+
+#[test]
+fn test_approx_curve_ellipse()
+{
+    let mut ctxt = StepperContext::new(&[10, 10],
+                                       &[10, 10],
+                                       &[3.0, 7.0],
+                                       &[1.5, 3.5]);
+
+    let circle = Ellipse::new(670.0,670.0, 0.0, PI/2.0, 0.0);
+    ctxt.approx_curve(&circle, 30.0);
+
 }

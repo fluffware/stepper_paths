@@ -2,12 +2,24 @@ use std;
 use std::fmt;
 
 #[derive(Debug)]
-pub struct Point
+pub struct Vector
 {
     pub x: f64,
     pub y: f64
 }
-impl std::fmt::Display for Point
+impl Vector {
+    pub fn length(&self) -> f64
+    {
+        (self.x*self.x + self.y*self.y).sqrt() 
+    }
+
+    pub fn scalar_mul(&self, other: Self) -> f64
+    {
+        (self.x * other.x + self.y * other.y)
+    }
+}
+
+impl std::fmt::Display for Vector
 {
     fn fmt(self: &Self,f: &mut fmt::Formatter) -> fmt::Result
     {
@@ -15,54 +27,57 @@ impl std::fmt::Display for Point
     }
 }
 
-impl std::cmp::PartialEq for Point
+impl std::cmp::PartialEq for Vector
 {
     fn eq(&self, t: &Self) ->bool
     {
         self.x == t.x && self.y == t.y
     }
 }
-impl Clone for Point
+impl Clone for Vector
 {
-    fn clone(&self) -> Point {
-        Point{x: self.x, y: self.y}
+    fn clone(&self) -> Vector {
+        Vector{x: self.x, y: self.y}
     }
 }
 
-impl Copy for Point
+impl Copy for Vector
 {
 }
-impl std::ops::Add<Point> for Point {
-    type Output = Point;
-    fn add(self, v: Point) -> Point {
-        Point { x: self.x + v.x,
+
+
+
+impl std::ops::Add<Vector> for Vector {
+    type Output = Vector;
+    fn add(self, v: Vector) -> Vector {
+        Vector { x: self.x + v.x,
                 y: self.y + v.y}
     }
 }
-impl std::ops::AddAssign<Point> for Point {
-    fn add_assign(&mut self, v: Point)  {
+impl std::ops::AddAssign<Vector> for Vector {
+    fn add_assign(&mut self, v: Vector)  {
         self.x += v.x;
         self.y += v.y;
     }
 }
 
-impl std::ops::Sub<Point> for Point {
-    type Output = Point;
-    fn sub(self, v: Point) -> Point {
-        Point { x: self.x - v.x,
+impl std::ops::Sub<Vector> for Vector {
+    type Output = Vector;
+    fn sub(self, v: Vector) -> Vector {
+        Vector { x: self.x - v.x,
                 y: self.y - v.y}
     }
 }
-impl std::ops::SubAssign<Point> for Point {
-    fn sub_assign(&mut self, v: Point)  {
+impl std::ops::SubAssign<Vector> for Vector {
+    fn sub_assign(&mut self, v: Vector)  {
         self.x -= v.x;
         self.y -= v.y;
     }
 }
-impl std::ops::Mul<f64> for Point {
-    type Output = Point;
-    fn mul(self, s: f64) -> Point {
-        Point { x: self.x * s,
+impl std::ops::Mul<f64> for Vector {
+    type Output = Vector;
+    fn mul(self, s: f64) -> Vector {
+        Vector { x: self.x * s,
                 y: self.y * s}
     }
 }
@@ -106,7 +121,7 @@ impl Transform {
         Transform{matrix:[c, s, -s, c, 0.0, 0.0]}
     }
 
-    pub fn rotate_around(a: f64, pivot: &Point) -> Transform {
+    pub fn rotate_around(a: f64, pivot: &Vector) -> Transform {
         let (s,c) = a.sin_cos();
         Transform{matrix:[c, s, -s, c, 
                           pivot.x*(1.0-c) + pivot.y*s, 
@@ -148,13 +163,15 @@ impl std::ops::Mul for Transform {
     }
 }
 
-impl std::ops::Mul<Point> for Transform {
-    type Output = Point;
-    fn mul(self, v: Point) -> Point {
-        Point { x: self.matrix[0] * v.x + self.matrix[2] * v.y + self.matrix[4],
+impl std::ops::Mul<Vector> for Transform {
+    type Output = Vector;
+    fn mul(self, v: Vector) -> Vector {
+        Vector { x: self.matrix[0] * v.x + self.matrix[2] * v.y + self.matrix[4],
                 y: self.matrix[1] * v.x + self.matrix[3] * v.y + self.matrix[5]}
     }
 }
+
+pub type Point = Vector;
 
 #[cfg(test)]
 fn assert_matrix_eq(a:&[f64;6], b:&[f64;6])

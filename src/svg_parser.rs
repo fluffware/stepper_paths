@@ -382,8 +382,8 @@ fn build_path(ctxt: &mut PathContext, cmd: char, args: &Vec<f64>,
                     ctxt.pos = p;
                  }
                 let Point {x,y} = *tr*ctxt.pos;
-                segs.push(CurveSegment::GoTo(x as i64,
-                                             y as i64));
+                segs.push(CurveSegment::GoTo(x,
+                                             y));
                 ctxt.start = ctxt.pos;
             }
             while let Some(p) = coords.next() {
@@ -393,7 +393,7 @@ fn build_path(ctxt: &mut PathContext, cmd: char, args: &Vec<f64>,
                     ctxt.pos = p;
                 }
                 let Point {x,y} = *tr*ctxt.pos;
-                segs.push(CurveSegment::LineTo(x as i64, y as i64));
+                segs.push(CurveSegment::LineTo(x, y));
             }
             ctxt.last_control = None;
         },
@@ -413,7 +413,7 @@ fn build_path(ctxt: &mut PathContext, cmd: char, args: &Vec<f64>,
                     ctxt.pos = p;
                 }
                 let Point {x,y} = *tr*ctxt.pos;
-                segs.push(CurveSegment::LineTo(x as i64, y as i64));
+                segs.push(CurveSegment::LineTo(x, y));
             }
             ctxt.last_control = None;
         },
@@ -428,7 +428,7 @@ fn build_path(ctxt: &mut PathContext, cmd: char, args: &Vec<f64>,
                     ctxt.pos.y = y;
                 }
                 let Point {x,y} = *tr*ctxt.pos;
-                segs.push(CurveSegment::LineTo(x as i64, y as i64));
+                segs.push(CurveSegment::LineTo(x, y));
             }
             ctxt.last_control = None;
         },
@@ -443,7 +443,7 @@ fn build_path(ctxt: &mut PathContext, cmd: char, args: &Vec<f64>,
                     ctxt.pos.x = x;
                 }
                 let Point {x,y} = *tr*ctxt.pos;
-                segs.push(CurveSegment::LineTo(x as i64, y as i64));
+                segs.push(CurveSegment::LineTo(x, y ));
             }
             ctxt.last_control = None;
         },
@@ -493,9 +493,9 @@ fn build_path(ctxt: &mut PathContext, cmd: char, args: &Vec<f64>,
                 ctxt.last_control = Some(c2);
                 let p2 = *tr * p2;
                 let c2 = *tr * c2 - p2;
-                segs.push(CurveSegment::CurveTo(p2.x as i64, p2.y as i64, 
-                                                c1.x as i64, c1.y as i64,
-                                                c2.x as i64, c2.y as i64));
+                segs.push(CurveSegment::CurveTo(p2.x, p2.y, 
+                                                c1.x, c1.y,
+                                                c2.x, c2.y));
             }
         },
          'q' | 'Q' => {
@@ -541,9 +541,9 @@ fn build_path(ctxt: &mut PathContext, cmd: char, args: &Vec<f64>,
                 let c2 = (*tr * m1 - p2) * (2.0 / 3.0);
                 
 
-                segs.push(CurveSegment::CurveTo(p2.x as i64, p2.y as i64, 
-                                                c1.x as i64, c1.y as i64,
-                                                c2.x as i64, c2.y as i64));
+                segs.push(CurveSegment::CurveTo(p2.x, p2.y, 
+                                                c1.x, c1.y,
+                                                c2.x, c2.y));
             }
         },
         'a' | 'A' => {
@@ -684,7 +684,7 @@ fn build_path(ctxt: &mut PathContext, cmd: char, args: &Vec<f64>,
 
                 println!("Calculated: ({}, {})", xa2 -xa1, ya2-ya1);
                 */
-                segs.push(CurveSegment::Arc(rx as i64,ry as i64, a1,a2, rot));
+                segs.push(CurveSegment::Arc(rx,ry, a1,a2, rot));
                 
                 if rel {
                     ctxt.pos.x += x;
@@ -699,8 +699,8 @@ fn build_path(ctxt: &mut PathContext, cmd: char, args: &Vec<f64>,
         'z' | 'Z' => {
             ctxt.pos = ctxt.start;
             let Point {x,y} = *tr*ctxt.pos;
-            segs.push(CurveSegment::LineTo(x as i64,
-                                           y as i64));
+            segs.push(CurveSegment::LineTo(x,
+                                           y));
         },
         c => return Err(format!("Unknown command '{}'", c))
     };
