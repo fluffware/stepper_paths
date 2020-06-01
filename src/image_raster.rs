@@ -241,7 +241,7 @@ fn main() {
         }
     };
 
-    let buffer = match image::load(BufReader::new(file), image::ImageFormat::PNG)
+    let buffer = match image::load(BufReader::new(file), image::ImageFormat::Png)
     {
         Ok(dyn_buffer) => dyn_buffer.to_luma(),
         Err(e) =>  {
