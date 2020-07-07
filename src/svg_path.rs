@@ -220,11 +220,13 @@ fn main() {
         };
  
    
-    let mut ctxt = StepperContext::new(&[ax_max, ay_max],
-                                       &[vx_max, vy_max],
-                                       &[config.stepper_x.steps_per_millimeter,
-                                         config.stepper_y.steps_per_millimeter],
-                                       &[vx_scale, vy_scale]);
+    let mut ctxt = StepperContext::new(
+        &[ax_max, ay_max],
+        &[vx_max, vy_max],
+        &[config.stepper_x.steps_per_millimeter,
+          config.stepper_y.steps_per_millimeter],
+        &[config.stepper_x.steps_per_millimeter / 2.0,
+          config.stepper_y.steps_per_millimeter/ 2.0]);
     ctxt.set_weight(weight);
     
     let file = match File::open(&file_name) {
@@ -275,16 +277,24 @@ fn main() {
         }
     };
 
-    let trans = Transform::scale_xy(-config.stepper_x.steps_per_millimeter,
-                                    -config.stepper_y.steps_per_millimeter);
+    let trans = Transform::identity();
     let path = match svg_parser::parse_document(file, &trans, filter) {
         Err(msg) => panic!("Parser failed: {}", msg),
         Ok(path) => {println!("Segments: {:?}",path);path}
     };
-  
+
+    let mut res = Ok([0,0]);
     for _ in 0..n_repeat {
-        ctxt.draw_curves(&path,v_draw);
+        res = ctxt.draw_curves(&path,v_draw / (config.ticks_per_second as f64));
+        match &res {
+            Ok(_) => {},
+            Err(e) => {
+                eprintln!("Failed to draw curve: {}", e);
+                return;
+            }
+        }
     }
+     println!("Max errors: {:?}", res.unwrap());
                 
     println!("Pos: {:?}",ctxt.position());
     ctxt.step_goto(0,0);

@@ -170,7 +170,6 @@ impl LinearCurve
     /// * `pos`: Position along the length of the curve. Must be positive
     pub fn position(&mut self, pos: f64) -> f64
     {
-        let low_pos = 0f64;
         node_pos(self.curve.as_ref(), &mut self.node, pos, 0.00001)
     }
 }

@@ -17,6 +17,53 @@ impl Vector {
     {
         (self.x * other.x + self.y * other.y)
     }
+
+    /// Normalize vector to unit length
+    pub fn unit(&self) -> Vector
+    {
+        let l = self.length();
+        Point{x: self.x/l, y: self.y/l}
+    }
+
+    /// Angular direction
+    pub fn angle(&self) -> f64
+    {
+        self.y.atan2(self.x)
+    }
+
+    /// Rotate vector 90 deg clockwise
+    pub fn rotate_90_cw(&self) -> Vector
+    {
+        Vector{x: self.y, y: -self.x}
+    }
+
+    /// Rotate vector 90 deg counter-clockwise
+    pub fn rotate_90_ccw(&self) -> Vector
+    {
+        Vector{x: -self.y, y: self.x}
+    }
+
+    /// Get a value that has the same sign as the difference between the
+    /// angles
+    ///
+    /// If self.angle() < other.angle() then the result is negative, otherwise
+    /// positive.
+    /// The result is zero if the vectors are parallel.
+    pub fn diff_sign(&self, other: &Vector) -> f64
+    {
+        self.y * other.x - self.x * other.y
+    }
+
+    /// Returns cosine of the angle between `self` and `other`.
+    ///
+    /// For parallel vectors the returned value is 1,
+    /// for anti-parallel vectors it's -1 and 0 for perpendicular vectors.
+    pub fn angle_cos(&self, other: &Vector) -> f64
+    {
+        (self.x * other.x + self.y * other.y) 
+            / ((self.x * self.x + self.y * self.y ) 
+               * (other.x * other.x + other.y * other.y )).sqrt()
+    }
 }
 
 impl std::fmt::Display for Vector
@@ -45,6 +92,29 @@ impl Copy for Vector
 {
 }
 
+impl std::ops::Index<usize> for Vector
+{
+    type Output = f64;
+    fn index(&self, key: usize) -> &Self::Output
+    {
+        match key {
+            0 => &self.x,
+            1 => &self.y,
+            _ => panic!("Index out of range")
+        }
+    }
+}
+impl std::ops::IndexMut<usize> for Vector
+{
+    fn index_mut(&mut self, key: usize) -> &mut Self::Output
+    {
+        match key {
+            0 => &mut self.x,
+            1 => &mut self.y,
+            _ => panic!("Index out of range")
+        }
+    }
+}
 
 
 impl std::ops::Add<Vector> for Vector {
@@ -81,6 +151,15 @@ impl std::ops::Mul<f64> for Vector {
                 y: self.y * s}
     }
 }
+
+impl std::ops::Neg for Vector {
+    type Output = Vector;
+    fn neg(self) -> Self::Output
+    {
+        Vector{x: -self.x, y: -self.y}
+    }
+}
+
 #[derive(Debug)]
 pub struct Transform {
     pub matrix : [f64;6]
@@ -199,4 +278,16 @@ fn test_transform()
     let b = Transform::new(&[4.3, 0.1, 23.0, 18.7, 14.5, 2.7]);
     assert_transform_eq(&(a*b), &Transform::new(&[3.29,31.33,-400.2,312.9,-41.8,111.85]));
     assert_transform_eq(&(b*a), &Transform::new(&[168.89,132.9,85.1,147.3,-271.365,-234.645]));
+}
+
+#[test]
+fn test_diff_sign()
+{
+    
+    assert_eq!(Vector{x: 1.0, y:1.0}.diff_sign(&Vector{x:-4.0, y:-4.0}),
+               0.0);
+    assert!(Vector{x: 1.0, y:1.0}.diff_sign(&Vector{x:4.0, y:1.0}) > 0.0);
+    assert!(Vector{x: 1.0, y:1.0}.diff_sign(&Vector{x:1.0, y:4.0}) < 0.0);
+    assert!(Vector{x: 1.0, y:-1.0}.diff_sign(&Vector{x:4.0, y:-1.0}) < 0.0);
+    assert!(Vector{x: 1.0, y:-1.0}.diff_sign(&Vector{x:1.0, y:-4.0}) > 0.0);
 }

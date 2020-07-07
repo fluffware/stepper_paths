@@ -381,9 +381,8 @@ fn build_path(ctxt: &mut PathContext, cmd: char, args: &Vec<f64>,
                 } else {
                     ctxt.pos = p;
                  }
-                let Point {x,y} = *tr*ctxt.pos;
-                segs.push(CurveSegment::GoTo(x,
-                                             y));
+                let p1 = *tr*ctxt.pos;
+                segs.push(CurveSegment::GoTo(p1));
                 ctxt.start = ctxt.pos;
             }
             while let Some(p) = coords.next() {
@@ -392,8 +391,8 @@ fn build_path(ctxt: &mut PathContext, cmd: char, args: &Vec<f64>,
                 } else {
                     ctxt.pos = p;
                 }
-                let Point {x,y} = *tr*ctxt.pos;
-                segs.push(CurveSegment::LineTo(x, y));
+                let p2 = *tr*ctxt.pos;
+                segs.push(CurveSegment::LineTo(p2));
             }
             ctxt.last_control = None;
         },
@@ -412,8 +411,8 @@ fn build_path(ctxt: &mut PathContext, cmd: char, args: &Vec<f64>,
                 } else {
                     ctxt.pos = p;
                 }
-                let Point {x,y} = *tr*ctxt.pos;
-                segs.push(CurveSegment::LineTo(x, y));
+                let p2 = *tr*ctxt.pos;
+                segs.push(CurveSegment::LineTo(p2));
             }
             ctxt.last_control = None;
         },
@@ -427,8 +426,8 @@ fn build_path(ctxt: &mut PathContext, cmd: char, args: &Vec<f64>,
                 } else {
                     ctxt.pos.y = y;
                 }
-                let Point {x,y} = *tr*ctxt.pos;
-                segs.push(CurveSegment::LineTo(x, y));
+                let p2 = *tr*ctxt.pos;
+                segs.push(CurveSegment::LineTo(p2));
             }
             ctxt.last_control = None;
         },
@@ -442,8 +441,8 @@ fn build_path(ctxt: &mut PathContext, cmd: char, args: &Vec<f64>,
                 } else {
                     ctxt.pos.x = x;
                 }
-                let Point {x,y} = *tr*ctxt.pos;
-                segs.push(CurveSegment::LineTo(x, y ));
+                let p2 = *tr*ctxt.pos;
+                segs.push(CurveSegment::LineTo(p2));
             }
             ctxt.last_control = None;
         },
@@ -493,9 +492,7 @@ fn build_path(ctxt: &mut PathContext, cmd: char, args: &Vec<f64>,
                 ctxt.last_control = Some(c2);
                 let p2 = *tr * p2;
                 let c2 = *tr * c2 - p2;
-                segs.push(CurveSegment::CurveTo(p2.x, p2.y, 
-                                                c1.x, c1.y,
-                                                c2.x, c2.y));
+                segs.push(CurveSegment::CurveTo(p2, c1, c2));
             }
         },
          'q' | 'Q' => {
@@ -541,9 +538,7 @@ fn build_path(ctxt: &mut PathContext, cmd: char, args: &Vec<f64>,
                 let c2 = (*tr * m1 - p2) * (2.0 / 3.0);
                 
 
-                segs.push(CurveSegment::CurveTo(p2.x, p2.y, 
-                                                c1.x, c1.y,
-                                                c2.x, c2.y));
+                segs.push(CurveSegment::CurveTo(p2, c1, c2));
             }
         },
         'a' | 'A' => {
@@ -698,9 +693,8 @@ fn build_path(ctxt: &mut PathContext, cmd: char, args: &Vec<f64>,
         },
         'z' | 'Z' => {
             ctxt.pos = ctxt.start;
-            let Point {x,y} = *tr*ctxt.pos;
-            segs.push(CurveSegment::LineTo(x,
-                                           y));
+            let p2 = *tr*ctxt.pos;
+            segs.push(CurveSegment::LineTo(p2));
         },
         c => return Err(format!("Unknown command '{}'", c))
     };
