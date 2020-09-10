@@ -14,6 +14,7 @@ use std::fs::File;
 use std::io::BufReader;
 
 use std::str::FromStr;
+use std::convert::TryFrom;
 
 extern crate getopts;
 use getopts::Options;
@@ -321,26 +322,35 @@ fn main() {
                 if ltr {
                     ctxt.step_goto_speed((res_x * 2 * v_x as u32 * start_x) as i64, 
                                     (yn * res_y + repeat_y) as i64 * step_y, 
-                                    v_x, 0);
+                                         v_x, 0);
                     let start = ctxt.ticks();
-                    ctxt.add_acc_interval(0,0, res_x * length_x);
                     for xn in start_x..(start_x + length_x) {
                         let w = ((255-buffer.get_pixel(xn,yn).channels()[0]) as i32 * weight / 256) as i32;
                         if w != prev_weight {
-                            ctxt.add_weight_change(w, start+((xn - start_x)*res_x) as u64);
+                            let when = start+u64::from((xn - start_x)*res_x);
+                            let ivl = u32::try_from(when - ctxt.ticks()).unwrap();
+                            if ivl != 0 {
+                                ctxt.add_acc_interval(0,0, ivl);
+                            }
+                            //                            ctxt.add_weight_change(w, when);
                             prev_weight = w;
                         }
                     }
+                    
                 } else {
                     ctxt.step_goto_speed((res_x * 2 * v_x as u32 * (start_x+length_x)) as i64, 
                                     (yn * res_y + repeat_y) as i64 * step_y, 
-                                    -v_x, 0);
+                                         -v_x, 0);
                     let start = ctxt.ticks();
-                    ctxt.add_acc_interval(0,0, res_x * length_x);
                     for xn in (start_x..(start_x + length_x)).rev() {
                         let w = ((255-buffer.get_pixel(xn,yn).channels()[0]) as i32 * weight / 256) as i32;
                         if w != prev_weight {
-                            ctxt.add_weight_change(w, start+((start_x + length_x - 1 - xn)*res_x) as u64);
+                            let when = start+((start_x + length_x - 1 - xn)*res_x) as u64;
+                            let ivl = u32::try_from(when - ctxt.ticks()).unwrap();
+                            if ivl != 0 {
+                                ctxt.add_acc_interval(0,0, ivl);
+                            }
+                        //    ctxt.add_weight_change(w, when);
                             prev_weight = w;
                         }
                     }
