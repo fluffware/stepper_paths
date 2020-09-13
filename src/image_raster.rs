@@ -131,17 +131,17 @@ fn main() {
 
      let vx_scale = config.stepper_x.steps_per_millimeter
         / (2 * config.ticks_per_second) as f64;
-    let mut vx_max = (vx_scale * config.stepper_x.max_velocity).round() as i32;
+    let mut vx_max = (vx_scale.abs() * config.stepper_x.max_velocity).round() as i32;
 
     let vy_scale = config.stepper_y.steps_per_millimeter
         / (2 * config.ticks_per_second) as f64;
-    let mut vy_max = (vy_scale * config.stepper_y.max_velocity).round() as i32;
+    let mut vy_max = (vy_scale.abs() * config.stepper_y.max_velocity).round() as i32;
     
     match matches.opt_str("v-max") {
         Some(arg) => match f64::from_str(&arg) {
             Ok(value) => {
-                vx_max = (vx_scale * value) as i32;
-                vy_max = (vy_scale * value) as i32;
+                vx_max = (vx_scale.abs() * value) as i32;
+                vy_max = (vy_scale.abs() * value) as i32;
             },
             Err(err) => {
                 println!("Invalid max velocity: {}", err);
@@ -155,15 +155,15 @@ fn main() {
     let ay_scale = vx_scale / config.ticks_per_second as f64;
 
     let mut ax_max = 
-        (ax_scale * config.stepper_x.max_acceleration).round() as i32;
+        (ax_scale.abs() * config.stepper_x.max_acceleration).round() as i32;
     let mut ay_max = 
-        (ay_scale * config.stepper_y.max_acceleration).round() as i32;
+        (ay_scale.abs() * config.stepper_y.max_acceleration).round() as i32;
     
     match matches.opt_str("a-max") {
         Some(arg) => match f64::from_str(&arg) {
             Ok(value) => {
-                ax_max = (value * ax_scale) as i32;
-                ay_max = (value * ay_scale) as i32;
+                ax_max = (value * ax_scale).abs() as i32;
+                ay_max = (value * ay_scale).abs() as i32;
             },
             Err(err) => {
                 println!("Invalid max acceleration: {}", err);
@@ -295,7 +295,7 @@ fn main() {
     ctxt.set_weight(weight);
 
     let width = width_mm *config.stepper_x.steps_per_millimeter;
-    let res_x = (width / (x_pixels as f64 * v_draw as f64)).round() as u32;
+    let res_x = (width * TICKS_PER_SECOND as f64 / (x_pixels as f64 * (v_draw * config.stepper_x.steps_per_millimeter))).round() as u32;
     let res_x = u32::max(1, res_x);
     let interval = x_pixels * res_x;
     let v_x = (width / (2*interval) as f64).round() as i32;
@@ -310,6 +310,7 @@ fn main() {
         / config.stepper_y.steps_per_millimeter;
     println!("Width: {} mm, height: {} mm", width_mm, height_mm);
 
+    println!("res_x: {} res_y: {}", res_x, res_y);
     let mut ltr = true;
     for yn in 0..y_pixels {
         let (start_x, length_x) = 
@@ -332,7 +333,7 @@ fn main() {
                             if ivl != 0 {
                                 ctxt.add_acc_interval(0,0, ivl);
                             }
-                            //                            ctxt.add_weight_change(w, when);
+                            ctxt.add_weight_change(w, when);
                             prev_weight = w;
                         }
                     }
@@ -350,7 +351,7 @@ fn main() {
                             if ivl != 0 {
                                 ctxt.add_acc_interval(0,0, ivl);
                             }
-                        //    ctxt.add_weight_change(w, when);
+                            ctxt.add_weight_change(w, when);
                             prev_weight = w;
                         }
                     }
@@ -363,6 +364,7 @@ fn main() {
     
    
     ctxt.step_goto(0,0);
+    println!("End time: {} s", ctxt.ticks() / (TICKS_PER_SECOND as u64));
     if let Some(mut serport) = serport {
         let events = ctxt.events();
         

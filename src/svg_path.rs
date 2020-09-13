@@ -111,17 +111,17 @@ fn main() {
 
     let vx_scale = config.stepper_x.steps_per_millimeter
         / (2 * config.ticks_per_second) as f64;
-    let mut vx_max = (vx_scale * config.stepper_x.max_velocity).round() as i32;
+    let mut vx_max = (vx_scale.abs() * config.stepper_x.max_velocity).round() as i32;
 
     let vy_scale = config.stepper_y.steps_per_millimeter
         / (2 * config.ticks_per_second) as f64;
-    let mut vy_max = (vy_scale * config.stepper_y.max_velocity).round() as i32;
+    let mut vy_max = (vy_scale.abs() * config.stepper_y.max_velocity).round() as i32;
     
     match matches.opt_str("v-max") {
         Some(arg) => match f64::from_str(&arg) {
             Ok(value) => {
-                vx_max = (vx_scale * value) as i32;
-                vy_max = (vy_scale * value) as i32;
+                vx_max = (vx_scale.abs() * value) as i32;
+                vy_max = (vy_scale.abs() * value) as i32;
             },
             Err(err) => {
                 println!("Invalid max velocity: {}", err);
@@ -135,15 +135,15 @@ fn main() {
     let ay_scale = vy_scale / config.ticks_per_second as f64;
     
     let mut ax_max =
-        (ax_scale * config.stepper_x.max_acceleration).round() as i32;
+        (ax_scale * config.stepper_x.max_acceleration).abs().round() as i32;
     let mut ay_max =
-        (ay_scale * config.stepper_y.max_acceleration).round() as i32;
+        (ay_scale * config.stepper_y.max_acceleration).abs().round() as i32;
     
     match matches.opt_str("a-max") {
         Some(arg) => match f64::from_str(&arg) {
             Ok(value) => {
-                ax_max = (value * ax_scale) as i32;
-                ay_max = (value * ay_scale) as i32;
+                ax_max = (value * ax_scale).abs() as i32;
+                ay_max = (value * ay_scale).abs() as i32;
             },
             Err(err) => {
                 println!("Invalid max acceleration: {}", err);
@@ -226,7 +226,7 @@ fn main() {
         &[config.stepper_x.steps_per_millimeter,
           config.stepper_y.steps_per_millimeter],
         &[config.stepper_x.steps_per_millimeter / 2.0,
-          config.stepper_y.steps_per_millimeter/ 2.0]);
+          config.stepper_y.steps_per_millimeter / 2.0]);
     ctxt.set_weight(weight);
     
     let file = match File::open(&file_name) {
@@ -298,6 +298,7 @@ fn main() {
                 
     println!("Pos: {:?}",ctxt.position());
     ctxt.step_goto(0,0);
+    println!("End time: {} s", ctxt.ticks() / (TICKS_PER_SECOND as u64));
     if let Some(mut serport) = serport {
         let events = ctxt.events();
         
