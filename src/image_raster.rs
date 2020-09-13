@@ -319,43 +319,40 @@ fn main() {
         if length_x > 0 {
             for repeat_y in 0.. res_y {
                 let mut prev_weight = 0;
-                
+
+                let line_start;
+                let line_v;
+
+                let bitmap_x: Box<dyn Fn(u32) -> u32>;
                 if ltr {
-                    ctxt.step_goto_speed((res_x * 2 * v_x as u32 * start_x) as i64, 
-                                    (yn * res_y + repeat_y) as i64 * step_y, 
-                                         v_x, 0);
-                    let start = ctxt.ticks();
-                    for xn in start_x..(start_x + length_x) {
-                        let w = ((255-buffer.get_pixel(xn,yn).channels()[0]) as i32 * weight / 256) as i32;
-                        if w != prev_weight {
-                            let when = start+u64::from((xn - start_x)*res_x);
-                            let ivl = u32::try_from(when - ctxt.ticks()).unwrap();
-                            if ivl != 0 {
-                                ctxt.add_acc_interval(0,0, ivl);
-                            }
-                            ctxt.add_weight_change(w, when);
-                            prev_weight = w;
-                        }
-                    }
-                    
+                    line_start = start_x;
+                    line_v = v_x;
+                    bitmap_x = Box::new(|xn| start_x + xn);
                 } else {
-                    ctxt.step_goto_speed((res_x * 2 * v_x as u32 * (start_x+length_x)) as i64, 
-                                    (yn * res_y + repeat_y) as i64 * step_y, 
-                                         -v_x, 0);
-                    let start = ctxt.ticks();
-                    for xn in (start_x..(start_x + length_x)).rev() {
-                        let w = ((255-buffer.get_pixel(xn,yn).channels()[0]) as i32 * weight / 256) as i32;
-                        if w != prev_weight {
-                            let when = start+((start_x + length_x - 1 - xn)*res_x) as u64;
-                            let ivl = u32::try_from(when - ctxt.ticks()).unwrap();
-                            if ivl != 0 {
-                                ctxt.add_acc_interval(0,0, ivl);
-                            }
-                            ctxt.add_weight_change(w, when);
-                            prev_weight = w;
+                    line_start = start_x + length_x;
+                    line_v = -v_x;
+                    bitmap_x = Box::new(|xn| start_x + length_x - 1 - xn);
+                }
+                ctxt.step_goto_speed((res_x * 2 * v_x as u32 * line_start) as i64, 
+                                     (yn * res_y + repeat_y) as i64 * step_y, 
+                                     line_v, 0);
+                let start = ctxt.ticks();
+                for xn in 0..length_x {
+                    let w = ((255-buffer.get_pixel(bitmap_x(xn),yn).channels()[0]) as i32 * weight / 256) as i32;
+                    if w != prev_weight {
+                        let when = start + u64::from(xn *res_x);
+                        let ivl = u32::try_from(when - ctxt.ticks()).unwrap();
+                        if ivl != 0 {
+                            ctxt.add_acc_interval(0,0, ivl);
                         }
+                        ctxt.add_weight_change(w, when);
+                        prev_weight = w;
                     }
                 }
+                let when = start + u64::from(length_x * res_x);
+                let ivl = u32::try_from(when - ctxt.ticks()).unwrap();
+                ctxt.add_acc_interval(0,0, ivl);
+                ctxt.add_weight_change(0, when);
                 ltr = !ltr;
             }
         }
