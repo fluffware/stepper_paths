@@ -15,7 +15,7 @@ impl Vector {
 
     pub fn scalar_mul(&self, other: Self) -> f64
     {
-        (self.x * other.x + self.y * other.y)
+        self.x * other.x + self.y * other.y
     }
 
     /// Normalize vector to unit length
