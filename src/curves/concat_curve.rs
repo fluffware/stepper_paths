@@ -57,6 +57,14 @@ impl ConcatCurve
         
 }    
 
+impl Default for ConcatCurve
+{
+    fn default() -> ConcatCurve
+    {
+        ConcatCurve::new()
+    }
+}
+
 impl CurveInfo for ConcatCurve {
     fn length(&self) -> f64
     {

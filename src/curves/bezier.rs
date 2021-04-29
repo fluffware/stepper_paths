@@ -20,8 +20,8 @@ impl Bezier
     pub fn new(c1: Point, c2: Point, p2: Point) 
                -> Bezier
     {
-        assert_ne!(c1.length(), 0.0);
-        assert_ne!(c2.length(), 0.0);
+        assert!(c1.length() > f64::EPSILON);
+        assert!(c2.length() > f64::EPSILON);
         let cx = coefficients_from_control(&[c1.x, c2.x, p2.x]);
         let cy = coefficients_from_control(&[c1.y,  c2.y, p2.y]);
         let dx = deriv_from_coefficients(&cx);
@@ -216,15 +216,15 @@ impl CurveInfo for Bezier
                         match solve_2nd_degree(&[3.0 * a3, 2.0 * a2, a1]) {
                             Solution2ndDegree::None => {},
                             Solution2ndDegree::One(x1) 
-                                if x1 > 1.0 || x1 < 0.0 => {},
-                             Solution2ndDegree::Two(x1,x2) 
-                                if (x1 > 1.0 || x1 < 0.0) 
-                                && (x2 > 1.0 || x2 < 0.0) => {},
+                                if !(0.0..=1.0).contains(&x1) => {},
+                            Solution2ndDegree::Two(x1,x2) 
+                                if !(0.0..=1.0).contains(&x1) 
+                                && !(0.0..=1.0).contains(&x2) => {},
                             
                             _ => panic!("The mapping from position to parameter is not 1:1")
                         }
                         let ts = solve_3rd_degree(&[a3,a2,a1,a0], 0.5);
-                        if ts < -0.001 || ts > 1.001 {
+                        if !(-0.001..=1.001).contains(&ts) {
                             panic!("ts: {}", ts);
                         }
 
@@ -286,6 +286,7 @@ fn polynom_value(coeffs: &[f64], t: f64) -> f64
     sum
 }
 
+#[allow(clippy::many_single_char_names)]
 /// Find solutions for c[0]*x^3 + c[1]*x^2 + c[2]*x + c[3] = 0
 /// This function assumes the equation has exactly one solution
 fn solve_3rd_degree(c: &[f64;4], mut t: f64) -> f64

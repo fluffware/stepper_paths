@@ -16,7 +16,7 @@ pub struct LaserConfig
 }
 use std::fs::File;
 
-pub struct XYStepperConfig
+pub struct XyStepperConfig
 {
     pub ticks_per_second: u32,
     pub stepper_x: StepperConfig,
@@ -41,7 +41,7 @@ impl std::error::Error for Error
 {
     fn description(&self) -> &str
     {
-        return &self.descr;
+        &self.descr
     }
     
     fn cause(&self) -> Option<&dyn std::error::Error> {None}
@@ -111,7 +111,7 @@ fn update_laser(laser: &mut LaserConfig, map: &serde_json::Map<String, serde_jso
     set_u32(&map["alignmentIntensity"],&mut laser.alignment_intensity)?;
     Ok(())
 }  
-pub fn read_config(config: &mut XYStepperConfig, file_name: &str) -> Result<(), Error>
+pub fn read_config(config: &mut XyStepperConfig, file_name: &str) -> Result<(), Error>
 {
     let file = match File::open(&file_name) {
         Ok(file) => file,
@@ -125,29 +125,17 @@ pub fn read_config(config: &mut XYStepperConfig, file_name: &str) -> Result<(), 
         Err(e) =>  return Err(Error::new(&format!("Failed to parse config: {}", e)))
     };
     set_u32(&json["ticksPerSecond"], &mut config.ticks_per_second)?;
-    match &json["stepperX"]
+    if let serde_json::Value::Object(map) = &json["stepperX"]
     {
-        serde_json::Value::Object(map) =>
-        {
-            update_stepper(&mut config.stepper_x, map)?;
-        },
-        _ => ()
+        update_stepper(&mut config.stepper_x, map)?;
     }
-    match &json["stepperY"]
+    if let serde_json::Value::Object(map) =  &json["stepperY"]
     {
-        serde_json::Value::Object(map) =>
-        {
             update_stepper(&mut config.stepper_y, map)?;
-        },
-        _ => ()
     }
-    match &json["laser"]
+    if let serde_json::Value::Object(map) = &json["laser"]
     {
-        serde_json::Value::Object(map) =>
-        {
-            update_laser(&mut config.laser, map)?;
-        },
-        _ => ()
+        update_laser(&mut config.laser, map)?;
     }
     Ok(())
 }

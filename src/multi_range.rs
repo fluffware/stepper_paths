@@ -47,7 +47,7 @@ impl<T:Sized+PartialOrd+Copy+Debug> MultiRange<T>
     /// * `high` - High limit of range, exclusive
     
     pub fn range(low: T, high: T) -> MultiRange<T>{
-        MultiRange {ranges: vec![Range::<T> {low: low, high: high}]}
+        MultiRange {ranges: vec![Range::<T> {low, high}]}
     }
 
     /// Add a slice of ranges
@@ -87,11 +87,11 @@ impl<T:Sized+PartialOrd+Copy+Debug> MultiRange<T>
             last+=1;
         }
         if first == last {
-            self.ranges.insert(first , Range {low: low, high: high});
+            self.ranges.insert(first , Range {low, high});
         } else {
             let low = min(self.ranges[first].low, low);
             let high = max(self.ranges[last-1].high, high);
-            self.ranges[first] = Range {low:low,high:high};
+            self.ranges[first] = Range {low,high};
             if first + 1 < last {
                 self.ranges.drain(first + 1 .. last);
             }
@@ -124,7 +124,7 @@ impl<T:Sized+PartialOrd+Copy+Debug> MultiRange<T>
                 break;
             }
         }
-        return res;
+        res
             
     }
     /// Intersect with multi range.
@@ -176,9 +176,9 @@ impl<T:Sized+PartialOrd+Copy+Debug> MultiRange<T>
 
     /// Returns true if there are no ranges in the sequence.
     
-    pub fn empty(&self) -> bool
+    pub fn is_empty(&self) -> bool
     {
-        self.ranges.len() == 0
+        self.ranges.is_empty()
     }
 
     /// Returns lowest and highest limits of the sequence
@@ -192,23 +192,24 @@ impl<T:Sized+PartialOrd+Copy+Debug> MultiRange<T>
     }
 }
 
+impl<T:Sized+PartialOrd+Copy+Debug> Default for MultiRange<T> {
+    fn default() -> Self
+    {
+         Self::new()
+    }
+}
+
 impl<T:Debug+PartialOrd> Debug for MultiRange<T> {
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
         let mut iter = self.ranges.iter();
         if let Some(r) = iter.next() {
-            if let Err(e) = r.fmt(f) {
-                return Err(e);
-            }
-            while let Some(r) = iter.next() {
-                if let Err(e) = f.write_str(", ") {
-                      return Err(e);
-                }
-                if let Err(e) = r.fmt(f) {
-                    return Err(e);
-                }
+            r.fmt(f)?;
+            for r in iter {
+                f.write_str(", ")?;
+                r.fmt(f)?; 
             }
         }
-        return Ok(());
+        Ok(())
     }
 }
 

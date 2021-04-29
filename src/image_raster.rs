@@ -76,7 +76,7 @@ fn main() {
     
     let matches = match opts.parse(&args[1..]) {
         Ok(m) => { m }
-        Err(f) => { panic!(f.to_string()) }
+        Err(f) => { panic!("{}", f.to_string()) }
     };
     if matches.opt_present("h") {
         usage(&program, opts);
@@ -84,13 +84,13 @@ fn main() {
     }
     
 
-    if matches.free.len() < 1 {
+    if matches.free.is_empty() {
         println!("No file name");
         return;
     }
 
 
-    let mut config =stepper_config::XYStepperConfig {
+    let mut config =stepper_config::XyStepperConfig {
         ticks_per_second: TICKS_PER_SECOND as u32,
         stepper_x: 
         stepper_config::StepperConfig {
@@ -111,18 +111,13 @@ fn main() {
             alignment_intensity: 5
         }
     };
-    match matches.opt_str("config")
+    if let Some(filename) = matches.opt_str("config")
     {
-        Some(filename) =>
-            match stepper_config::read_config(&mut config, &filename)
+        if let Err(e) = stepper_config::read_config(&mut config, &filename)
         {
-            Ok(()) => (),
-            Err(e) => {
-                println!("{}", e);
-                return
-            }
-        },
-        None => ()
+            println!("{}", e);
+            return
+        }
     };
 
     let port_name = matches.opt_str("device");
@@ -137,8 +132,8 @@ fn main() {
         / (2 * config.ticks_per_second) as f64;
     let mut vy_max = (vy_scale.abs() * config.stepper_y.max_velocity).round() as i32;
     
-    match matches.opt_str("v-max") {
-        Some(arg) => match f64::from_str(&arg) {
+    if let Some(arg) = matches.opt_str("v-max") {
+        match f64::from_str(&arg) {
             Ok(value) => {
                 vx_max = (vx_scale.abs() * value) as i32;
                 vy_max = (vy_scale.abs() * value) as i32;
@@ -147,8 +142,7 @@ fn main() {
                 println!("Invalid max velocity: {}", err);
                 return
             }
-        },
-        None => ()
+        }
     };
     
     let ax_scale = vx_scale / config.ticks_per_second as f64;
@@ -159,8 +153,8 @@ fn main() {
     let mut ay_max = 
         (ay_scale.abs() * config.stepper_y.max_acceleration).round() as i32;
     
-    match matches.opt_str("a-max") {
-        Some(arg) => match f64::from_str(&arg) {
+    if let Some(arg) = matches.opt_str("a-max") {
+        match f64::from_str(&arg) {
             Ok(value) => {
                 ax_max = (value * ax_scale).abs() as i32;
                 ay_max = (value * ay_scale).abs() as i32;
@@ -169,8 +163,7 @@ fn main() {
                 println!("Invalid max acceleration: {}", err);
                 return
             }
-        },
-        None => ()
+        }
     };
     
     let v_draw = match matches.opt_str("draw-speed") {
@@ -186,7 +179,7 @@ fn main() {
     
     let weight = match matches.opt_str("intensity") {
         Some(arg) => match i32::from_str_radix(&arg, 10) {
-            Ok(value) if value <= 100 && value >= 0 => value,
+            Ok(value) if (0..=100).contains(&value) => value,
             Ok(_)  => {
                 println!("Invalid intensity, must be 0 - 100c");
                 return

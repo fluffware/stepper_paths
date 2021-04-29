@@ -37,7 +37,7 @@ struct CurveNode
 
 fn indent(f: &mut Formatter, indent: u32) -> Result<(), Error>
 {
-    const FILL: &'static str = "                    ";
+    const FILL: &str = "                    ";
     f.write_str(&FILL[0..FILL.len().min(indent as usize)])
 }
 
@@ -47,13 +47,13 @@ fn fmt_node(node: &CurveNode,
 {
     indent(f, ind)?;
     write!(f,"{{{:?} - {:?}, ", node.t_start, node.t_end)?;
-    write!(f,"{:?}\n", node.length)?;
+    writeln!(f,"{:?}", node.length)?;
     if let Some(children) = &node.children {
         fmt_node(&children.low, f, ind + 2)?;
         fmt_node(&children.high, f, ind + 2)?;
     }
     indent(f, ind)?;
-    write!(f,"}}\n")
+    writeln!(f,"}}")
 }
 
 impl Debug for CurveNode
@@ -105,7 +105,7 @@ fn node_length(curve: &dyn CurveApprox, node: &mut Box<CurveNode>) -> f64
         + high_length.unwrap_or_else(|| {
             node_length(curve, &mut children.high)
         }); 
-    return node.length
+    node.length
 }
 
 fn node_pos(curve: &dyn CurveApprox, node: &mut Box<CurveNode>,
@@ -138,10 +138,10 @@ fn node_pos(curve: &dyn CurveApprox, node: &mut Box<CurveNode>,
 
     let children = node.children.as_mut().unwrap();
     if children.low.length > rel_pos {
-        return node_pos(curve, &mut children.low, rel_pos,error);
+        node_pos(curve, &mut children.low, rel_pos,error)
     } else {
-        return node_pos(curve, &mut children.high,
-                        rel_pos - children.low.length,error);
+        node_pos(curve, &mut children.high,
+                        rel_pos - children.low.length,error)
     }
 
  

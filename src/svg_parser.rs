@@ -12,7 +12,7 @@ use std::f64::consts::PI;
 
 use nom::types::CompleteStr;
 
-const SVG_NS : &'static str = "http://www.w3.org/2000/svg";
+const SVG_NS : &str = "http://www.w3.org/2000/svg";
 
 mod parser {
     use nom::digit;
@@ -72,10 +72,7 @@ mod parser {
                                   opt!(preceded!(comma_wsp,
                                                  number))),
                                   |(x,y)| {
-                                      let y = match y {
-                                          Some(v) => v,
-                                          None => 0.0
-                                      };
+                                      let y = y.unwrap_or(0.0);
                                       Transform{matrix:[1f64,0f64,
                                                         0f64,1f64,
                                                         x,y]}}),
@@ -246,7 +243,7 @@ impl<'a, I> PointIterator<I>
     where I: Iterator<Item = &'a f64>
 {
     pub fn new(iter: I) -> PointIterator<I> {
-        PointIterator{iter: iter}
+        PointIterator{iter}
     }
 }
 
@@ -295,7 +292,7 @@ fn transpose2x2(m: [f64;4]) -> [f64;4]
 #[allow(dead_code)] 
 fn ellipse_canonical(mut rx : f64, mut ry: f64, mut rot: f64) -> (f64,f64, f64)
 {
-    if rx == ry {
+    if (rx-ry).abs() < f64::EPSILON {
         (rx,ry, 0.0)
     } else {
 
@@ -358,13 +355,36 @@ fn transform_ellipse(rx: f64, ry: f64, rot: f64, m: [f64;4]) -> (f64,f64, f64)
     //ellipse_canonical(trx, try, trot)
 }    
 
-fn build_path(ctxt: &mut PathContext, cmd: char, args: &Vec<f64>,
+struct ArcArgs {
+    rx: f64,
+    ry: f64,
+    rot: f64,
+    large_arc: bool,
+    sweep: bool,
+    x: f64,
+    y: f64,
+}
+    
+fn get_arc_args<'a, I:Iterator<Item=&'a f64>>(arg_iter: &mut I) -> Option<ArcArgs>
+{
+    Some(ArcArgs {
+        rx: *arg_iter.next()?,
+        ry: *arg_iter.next()?,
+        rot: arg_iter.next().map(|v| {v * PI / 180.0})?,
+        large_arc: arg_iter.next().map(|v| {*v != 0.0})?,
+        sweep: arg_iter.next().map(|v| {*v != 0.0})?,
+        x: *arg_iter.next()?,
+        y: *arg_iter.next()?
+    })
+}
+
+fn build_path(ctxt: &mut PathContext, cmd: char, args: &[f64],
               segs: &mut Vec<CurveSegment>, tr: &Transform, first_elem: bool) 
               -> Result<(), String>
 {
     //println!("{}: {:?}", cmd, args);
     
-    let rel = cmd >= 'a' && cmd <= 'z';
+    let rel = ('a'..= 'z').contains(&cmd);
     match cmd {
         'm' | 'M' => {
             if args.len() < 2 {
@@ -385,7 +405,7 @@ fn build_path(ctxt: &mut PathContext, cmd: char, args: &Vec<f64>,
                 segs.push(CurveSegment::GoTo(p1));
                 ctxt.start = ctxt.pos;
             }
-            while let Some(p) = coords.next() {
+            for p in coords {
                 if rel {
                     ctxt.pos += p;
                 } else {
@@ -417,7 +437,7 @@ fn build_path(ctxt: &mut PathContext, cmd: char, args: &Vec<f64>,
             ctxt.last_control = None;
         },
         'v' | 'V' => {
-            if args.len() < 1 {
+            if args.is_empty() {
                 return Err("Vertical-line-to command must have at least one argument".to_string());
             }
             for &y in args {
@@ -432,7 +452,7 @@ fn build_path(ctxt: &mut PathContext, cmd: char, args: &Vec<f64>,
             ctxt.last_control = None;
         },
         'h' | 'H' => {
-            if args.len() < 1 {
+            if args.is_empty() {
                 return Err("Horizontal-line-to command must have at least one argument".to_string());
             }
             for &x in args {
@@ -483,7 +503,7 @@ fn build_path(ctxt: &mut PathContext, cmd: char, args: &Vec<f64>,
                     Some(v) => v,
                     None => break
                 };
-                let p2 = Point{x: x, y: y} + offset;
+                let p2 = Point{x, y} + offset;
                 let c1 = Point{x: x1, y: y1} + offset;
                 let c2 = Point{x: x2, y: y2} + offset;
                 
@@ -525,7 +545,7 @@ fn build_path(ctxt: &mut PathContext, cmd: char, args: &Vec<f64>,
                     Some(v) => v,
                     None => break
                 };
-                let p2 = Point{x: x, y: y} + offset;
+                let p2 = Point{x, y} + offset;
                 let m1 = Point{x: x1, y: y1} + offset;
                 println!("p2: {}, m1: {}", p2, m1);
 
@@ -550,40 +570,11 @@ fn build_path(ctxt: &mut PathContext, cmd: char, args: &Vec<f64>,
             }
              let mut arg_iter = args.iter();
             
-            loop {
-                let rx = match arg_iter.next() {
-                    Some(v) => *v,
-                    None => break
-                };
-                let ry = match arg_iter.next() {
-                    Some(v) => *v,
-                    None => break
-                };
-                let rot = match arg_iter.next() {
-                    Some(v) => v * PI / 180.0,
-                    None => break
-                };
-                let large_arc = match arg_iter.next() {
-                    Some(v) => *v != 0.0,
-                    None => break
-                };
-                let sweep = match arg_iter.next() {
-                    Some(v) => *v != 0.0,
-                    None => break
-                };
-                let &x = match arg_iter.next() {
-                    Some(v) => v,
-                    None => break
-                };
-                let &y = match arg_iter.next() {
-                    Some(v) => v,
-                    None => break
-                };
-
+            while let Some(args) = get_arc_args(&mut arg_iter) {
                 let Point{x:dx,y:dy} = if rel {
-                    *tr*(Point{x:x,y:y} + ctxt.pos)
+                    *tr*(Point{x:args.x,y:args.y} + ctxt.pos)
                 } else {
-                    *tr*Point{x:x,y:y}
+                    *tr*Point{x:args.x,y:args.y}
                 } - *tr * ctxt.pos;
                 
                 if dx == 0.0 && dy == 0.0 {
@@ -594,12 +585,12 @@ fn build_path(ctxt: &mut PathContext, cmd: char, args: &Vec<f64>,
 
                 // Transform to rendering coords
                 let (rx, ry, rot) = 
-                    transform_ellipse(rx,ry, rot,
+                    transform_ellipse(args.rx,args.ry, args.rot,
                                       [tr.matrix[0], tr.matrix[2],
                                        tr.matrix[1], tr.matrix[3]]);
                                                
                 
-                let (rs,rc) = rot.sin_cos();
+                let (rs,rc) = args.rot.sin_cos();
 
                 let x1;
                 let y1;
@@ -649,7 +640,7 @@ fn build_path(ctxt: &mut PathContext, cmd: char, args: &Vec<f64>,
                 let a1 = (y1/ry).atan2(x1/rx);
                 let a2 = (y2/ry).atan2(x2/rx);
                 
-                let a2 = if large_arc ^ ((a2 - a1).abs() > PI) {
+                let a2 = if args.large_arc ^ ((a2 - a1).abs() > PI) {
                     if a1 < a2 {
                         a2 - 2.0 * PI
                     } else {
@@ -659,7 +650,7 @@ fn build_path(ctxt: &mut PathContext, cmd: char, args: &Vec<f64>,
                     a2
                 };
                 
-                let (a1,a2) = if sweep ^ (a2 > a1) {
+                let (a1,a2) = if args.sweep ^ (a2 > a1) {
                     (a2 + PI, a1 + PI) 
                 } else {
                     (a1,a2)
@@ -682,11 +673,11 @@ fn build_path(ctxt: &mut PathContext, cmd: char, args: &Vec<f64>,
                 segs.push(CurveSegment::Arc(rx,ry, a1,a2, rot));
                 
                 if rel {
-                    ctxt.pos.x += x;
-                    ctxt.pos.y += y;
+                    ctxt.pos.x += args.x;
+                    ctxt.pos.y += args.y;
                 } else {
-                    ctxt.pos.x = x;
-                    ctxt.pos.y = y;
+                    ctxt.pos.x = args.x;
+                    ctxt.pos.y = args.y;
                 }
             }
             
@@ -764,12 +755,12 @@ pub fn parse_document<T: Read>(input :T,t0: &Transform,
                                 //println!("path: {}", d);
                                 let mut pos = CompleteStr(&d);
                                 let mut first_elem = true;
-                                while let Ok((rest, (cmd, mut args))) = 
+                                while let Ok((rest, (cmd, args))) = 
                                     parser::path_command(pos) 
                                 {
                                     if let Err(e) = 
                                         build_path(&mut path_ctxt,
-                                                   cmd, &mut args,
+                                                   cmd, &args,
                                                    &mut path, &transform,
                                                    first_elem)
                                     {

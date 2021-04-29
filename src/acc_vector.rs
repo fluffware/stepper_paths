@@ -65,7 +65,7 @@ impl<'a> AccVector<'a> for Vec<AccSegment>
         while let Some(&AccSegment{interval: i,acc: a}) = seg.next() {
             let end = start + i;
             if t >= start && t < end {
-                return AccIter{count:end - t + 1, acc:a , seg: seg};
+                return AccIter{count:end - t + 1, acc:a , seg};
             }
             start = end;
         }
@@ -94,13 +94,12 @@ impl<'a> AccVector<'a> for Vec<AccSegment>
     fn acc_distance(&'a self, v0:i32) -> (i64, i32) {
         let mut s = 0i64;
         let mut v = v0 as i32;
-        let mut seg = self.iter();
-        while let Some(&AccSegment{interval: i,acc: a}) = seg.next() {
+        for &AccSegment{interval: i,acc: a} in self.iter() {
             let v_next = v + a as i32 * i as i32;
             s += (v + v_next) as i64 * i as i64;
             v = v_next;
         }
-        return (s,v);
+        (s,v)
     }
 }
 

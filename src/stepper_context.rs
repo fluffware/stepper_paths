@@ -108,7 +108,7 @@ fn curve_segment_to_info(seg: &CurveSegment, current_pos: &mut Point)
             },
             CurveSegment::Arc(rx,ry, start, end, _rot)  => {
                 // Only circles are supported
-                if *rx != *ry {return None;}
+                if (*rx - *ry).abs() > f64::EPSILON {return None;}
                 let circle = curves::circle_segment::CircleSegment::new(*rx, *start, *end);
                 let (end, _) = circle.value(circle.length());
                 *current_pos += end;
@@ -170,22 +170,22 @@ impl StepperContext {
     {
         let acc = [acc_x, acc_y];
         assert!(interval >= 1);
-        for i in 0..N_CHANNELS {
+        for (i,ref mut ch) in self.channels.iter_mut().enumerate() {
             /*
             if self.channels[i].ticks == self.event_ticks {
                 self.events.pop();
             }
              */
             self.events.push(StepperEvent {
-                ticks: (self.channels[i].ticks-self.event_ticks) as u32,
+                ticks: (ch.ticks-self.event_ticks) as u32,
                 cmd: Command::Acc(i as u8, acc[i])
             });
-            self.channels[i].pos += 
-                2 * interval as i64 * self.channels[i].v as i64
+            ch.pos += 
+                2 * interval as i64 * ch.v as i64
                 + interval as i64 * interval as i64 * acc[i] as i64;
-            self.channels[i].v += interval as i32 * acc[i] as i32;
-            self.event_ticks = self.channels[i].ticks;
-            self.channels[i].ticks += interval as u64;
+            ch.v += interval as i32 * acc[i] as i32;
+            self.event_ticks = ch.ticks;
+            ch.ticks += interval as u64;
         }
         assert_eq!(self.channels[X_INDEX].ticks, self.channels[Y_INDEX].ticks);
     }
@@ -210,12 +210,12 @@ impl StepperContext {
         loop {
             let mut min = u64::MAX;
             let mut min_index : Option<usize> = None;
-            for i in 0..N_CHANNELS {
-                if self.channels[i].ticks < min {
-                    if p[i].peek().is_some() {
-                        min_index = Some(i);
-                        min = self.channels[i].ticks;
-                    }
+            for (i,ch) in self.channels.iter().enumerate() {
+                if ch.ticks < min 
+                    && p[i].peek().is_some() 
+                {
+                    min_index = Some(i);
+                    min = ch.ticks;
                 }
             }
             if let Some(i) = min_index {
@@ -464,7 +464,7 @@ impl StepperContext {
     }
 
  
-
+    #[allow(clippy::unnecessary_wraps)]
     fn draw_curve(&mut self, start: Point, curve: &mut curves::concat_curve::ConcatCurve, v: f64) -> Result<[i64;2], Box<dyn Error>>
     {
         if !curve.is_empty() {
@@ -579,7 +579,7 @@ impl StepperContext {
     }
 
     
-    pub fn events<'a>(&'a mut self) -> &'a Vec<StepperEvent>
+    pub fn events(&mut self) -> &Vec<StepperEvent>
     {
         assert_eq!(self.channels[X_INDEX].ticks, self.channels[Y_INDEX].ticks);
 

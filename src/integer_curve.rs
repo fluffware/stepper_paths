@@ -6,7 +6,7 @@ use std::i64;
 use std::convert::TryFrom;
 use acc_vector::AccSegment;
 use acc_vector::AccVector;
-
+use std::cmp::Ordering;
 
 
 fn min_i64(a:i64, b:i64) ->i64
@@ -55,14 +55,16 @@ pub struct DistancePath {
 /// * `max_acc` - Maximum allowed acceleration. Positive.
 
 pub fn split_acc(v_diff: i64, max_acc: i64) -> (i64, i64) {
-    if v_diff > 0 {
+    match v_diff.cmp(&0) {
+        Ordering::Greater => {
             let dr = (v_diff-1).div_rem(&max_acc);
-        (dr.0.abs(), dr.1 + 1) 
-    } else if v_diff < 0 {
-        let dr = (v_diff+1).div_rem(&max_acc);
-        (dr.0.abs(), dr.1 - 1)
-        } else {
-        (0,0)
+            (dr.0.abs(), dr.1 + 1) 
+        },
+        Ordering::Less => {
+            let dr = (v_diff+1).div_rem(&max_acc);
+            (dr.0.abs(), dr.1 - 1)
+        },
+        Ordering::Equal => (0,0)
     }
 }
 
@@ -131,9 +133,9 @@ impl DistancePath {
 
     /// Returns the distance moved by this path
     pub fn distance(&self) -> i64 {
-        return path_distance(self.v0, self.vn, self.vflat, 
-                             self.amax, self.t_total)
-            + 2*self.t_adjust;
+        path_distance(self.v0, self.vn, self.vflat, 
+                      self.amax, self.t_total)
+            + 2*self.t_adjust
     }
 
     /// Returns an acceleration sequence corresponding to this path
@@ -153,38 +155,41 @@ impl DistancePath {
         let mut vflat_start = self.vflat;
         let mut vflat_end = self.vflat;
         let mut t_step = 0;
-        if self.t_adjust > 0 {
-            if self.vn > self.vflat {
+        match self.t_adjust.cmp(&0) {
+            Ordering::Greater => {
+                if self.vn > self.vflat {
                 vflat_end += 1;
-                t_step = -self.t_adjust;
-                if (vflat_end - self.vn) % a == 0 {
-                    t_step -=1;
+                    t_step = -self.t_adjust;
+                    if (vflat_end - self.vn) % a == 0 {
+                        t_step -=1;
+                    }
+                } else {
+                    assert!(self.v0 > self.vflat);
+                    vflat_start += 1;
+                    t_step = self.t_adjust;
+                    if (vflat_start - self.v0) % a == 0 {
+                        t_step += 1;
+                    }
                 }
-            } else {
-                assert!(self.v0 > self.vflat);
-                vflat_start += 1;
-                t_step = self.t_adjust;
-                if (vflat_start - self.v0) % a == 0 {
-                    t_step += 1;
+            },
+            Ordering::Less => {
+                if self.vn < self.vflat {
+                    vflat_end -= 1;
+                    t_step = self.t_adjust;
+                    if (vflat_end  - self.vn) % a == 0 {
+                        t_step -= 1;
+                    }
+                } else {
+                    assert!(self.v0 < self.vflat);
+                    vflat_start -= 1;
+                    t_step = -self.t_adjust;
+                    if (vflat_start - self.v0) % a == 0 {
+                        t_step += 1;
+                    }
                 }
-            }
-        } else if self.t_adjust < 0 {
-            if self.vn < self.vflat {
-                vflat_end -= 1;
-                t_step = self.t_adjust;
-                if (vflat_end  - self.vn) % a == 0 {
-                    t_step -= 1;
-                }
-            } else {
-                assert!(self.v0 < self.vflat);
-                vflat_start -= 1;
-                t_step = -self.t_adjust;
-                if (vflat_start - self.v0) % a == 0 {
-                    t_step += 1;
-                }
-            }
-        }
-        
+            },
+            Ordering::Equal => {}
+        };
         
         let (t1, dv1) = div_rem_away(vflat_start - self.v0, a);
         let (t4, dv4) = div_rem_away(vflat_end - self.vn, a);
@@ -206,16 +211,20 @@ impl DistancePath {
 
         
         assert!(self.t_adjust <= t_flat);
-        if t_step > 0 {
-            s.acc_push(u16::try_from(t_step-1).unwrap(), 0);
-            s.acc_push(1, i16::try_from(vflat_end - vflat_start).unwrap());
-            s.acc_push(u16::try_from(t_flat - t_step).unwrap(), 0);
-        } else if t_step < 0 {
-            s.acc_push(u16::try_from(t_flat + t_step).unwrap(), 0);
-            s.acc_push(1, i16::try_from(vflat_end - vflat_start).unwrap());
-            s.acc_push(u16::try_from(-t_step - 1).unwrap(), 0);
-        } else {
-            s.acc_push(u16::try_from(t_flat).unwrap(), 0);
+        match t_step.cmp(&0) {
+            Ordering::Greater => {
+                s.acc_push(u16::try_from(t_step-1).unwrap(), 0);
+                s.acc_push(1, i16::try_from(vflat_end - vflat_start).unwrap());
+                s.acc_push(u16::try_from(t_flat - t_step).unwrap(), 0);
+            },
+            Ordering::Less => {
+                s.acc_push(u16::try_from(t_flat + t_step).unwrap(), 0);
+                s.acc_push(1, i16::try_from(vflat_end - vflat_start).unwrap());
+                s.acc_push(u16::try_from(-t_step - 1).unwrap(), 0);
+            },
+            Ordering::Equal =>{
+                s.acc_push(u16::try_from(t_flat).unwrap(), 0);
+            }
         }
 
         if dv4 == 0 {
@@ -226,7 +235,7 @@ impl DistancePath {
             s.acc_push(u16::try_from(t4 - 1).unwrap() ,
                        i16::try_from(a4).unwrap());
         }
-        return s;
+        s
     }
 }
 
@@ -263,7 +272,7 @@ pub fn max_acceleration_curve(ds:i64, v0: i64, vn: i64, a: i64) -> MultiRange<i6
     // c = cx2 x^2 + cx x;
     let cx2 = a*a;
     let cx = 2*a*(v0+vn);
-    let c = (v0-vn)*(v0-vn) + a*a + 2*a * ds;
+    let c = (v0-vn)*(v0-vn) + a*(a + 2 * ds);
     
     // Positive acceleration
     //println!("cx2: {}, cx: {}, c: {}", cx2,cx,c);
@@ -302,7 +311,7 @@ pub fn max_acceleration_curve(ds:i64, v0: i64, vn: i64, a: i64) -> MultiRange<i6
         },
         _ => panic!("No solution found, but one exists")
     }
-    return r;
+    r
 }
 
 
@@ -329,7 +338,7 @@ pub fn speed_limited_curve(ds:i64, v0: i64, vn: i64, a: i64, vmax:i64) -> MultiR
     if ds >= s0 {
         r.or(t1 + t4 + (ds - s0 + 2*vmax  - 1) / (2*vmax), i64::MAX);
     }
-    return r;
+    r
 }
 
 /// Divide and round away from zero with remainder.
@@ -339,13 +348,10 @@ fn div_rem_away(a:i64,b:i64) -> (i64, i64)
 {
     assert!(b > 0);
     let (q1, r1) = a.div_rem(&b);
-    if r1 == 0 {(q1,r1)}
-    else {
-        if r1 > 0 {
-            (q1 + 1, r1 - b)
-        } else {
-            (q1 - 1, r1 + b)
-        }
+    match r1.cmp(&0) {
+        Ordering::Equal => (q1,r1),
+        Ordering::Greater => (q1 + 1, r1 - b),
+        Ordering::Less => (q1 - 1, r1 + b)
     }
 }
 
@@ -358,11 +364,12 @@ fn path_distance(v0: i64, vn:i64, vflat:i64, a:i64, t: i64) -> i64
     let (t4, dv4) = div_rem_away(vflat - vn, a);
     let t1 = t1.abs();
     let t4 = t4.abs();
-    return (vflat-dv1 +v0) * t1  + dv1 
+    (vflat-dv1 +v0) * t1  + dv1 
         + 2*vflat* (t - t1 - t4) 
-        + dv4 + (vflat-dv4 + vn) * t4;
+        + dv4 + (vflat-dv4 + vn) * t4
 }
 
+#[allow(clippy::many_single_char_names)]
 fn adjust_curve_mid(t_total: i64, ds: i64, v0: i64, vn: i64, a: i64) 
                     -> Option<DistancePath>
 {
@@ -376,9 +383,9 @@ fn adjust_curve_mid(t_total: i64, ds: i64, v0: i64, vn: i64, a: i64)
     // println!("k= {}, m= {}",k,m);
     if k == 0 {
         /* There is only one possible path, no adjustment can be done. */
-        return Some(DistancePath {v0: v0, vn: vn, amax:a, 
+        return Some(DistancePath {v0, vn, amax:a, 
                                   vflat:v_low+a, 
-                                  t_total:t_total, t_adjust: 0});
+                                  t_total, t_adjust: 0});
     }
     let smax = k * t_acc + m; // Acceleration
     let smin = (2*v_high - t_acc * a) * t_acc // Acceleration
@@ -408,9 +415,9 @@ fn adjust_curve_mid(t_total: i64, ds: i64, v0: i64, vn: i64, a: i64)
     // println!("v_flat= {}, s_flat= {}", v_flat, s);
 
     //println!("t= {}, s_high= {}, s_plit= {}",t, s_high, s_split);
-    return Some(DistancePath {v0:v0, vn: vn, amax:a, 
-                              vflat:v_flat, 
-                              t_total:t_total, t_adjust: (ds - s) / 2});
+    Some(DistancePath {v0, vn, amax:a, 
+                       vflat:v_flat, 
+                       t_total, t_adjust: (ds - s) / 2})
 }
 
 fn adjust_curve(t_total: i64, ds: i64,v0: i64, vn: i64, a: i64) -> DistancePath
@@ -422,7 +429,7 @@ fn adjust_curve(t_total: i64, ds: i64,v0: i64, vn: i64, a: i64) -> DistancePath
     if t_total ==  1 {
         let s = v0 + vn;
         assert!((s-ds).abs() <= 1);
-        return DistancePath {v0:v0, vn: vn, amax:a, vflat:v0, 
+        return DistancePath {v0, vn, amax:a, vflat:v0, 
                              t_total:1, t_adjust:0};
     }
 
@@ -483,17 +490,16 @@ fn adjust_curve(t_total: i64, ds: i64,v0: i64, vn: i64, a: i64) -> DistancePath
         vflat = max;
     } else if smin == ds {
         vflat = min;
-    } else {
-        if v0 > min || vn > min {
-            vflat = min;
-            t_adjust = (ds - smin) / 2;
-        } else  {
-            vflat = max;
-            t_adjust = (ds - smax) / 2;
-        }
+    } else if v0 > min || vn > min {
+        vflat = min;
+        t_adjust = (ds - smin) / 2;
+    } else  {
+        vflat = max;
+        t_adjust = (ds - smax) / 2;
     }
-    return DistancePath {vflat: vflat, v0: v0, vn:vn, amax: a, 
-                         t_adjust: t_adjust, t_total: t_total};
+
+     DistancePath {vflat, v0, vn, amax: a, 
+                   t_adjust, t_total}
 }
 
 /// Returns the possible lengths of acceleration curves that will
@@ -510,14 +516,14 @@ pub fn shortest_curve_length(ds:i64, v0: i64, vn: i64, a: i64, vmax:i64)
                              -> MultiRange<i64>
 {
     let mut pos = speed_limited_curve(ds, v0, vn, a, vmax);
-    if pos.empty() {
+    if pos.is_empty() {
         pos = max_acceleration_curve(ds, v0, vn, a);
     };
     let mut neg = speed_limited_curve(-ds, -v0, -vn, a, vmax);
-    if neg.empty() {
+    if neg.is_empty() {
         neg = max_acceleration_curve(-ds, -v0, -vn, a);
     };
-    return pos.and_range(&neg);
+    pos.and_range(&neg)
 }
 
 
@@ -535,7 +541,7 @@ pub fn shortest_curve_length(ds:i64, v0: i64, vn: i64, a: i64, vmax:i64)
 pub fn shortest_curve(ds:i64, v0: i64, vn: i64, a: i64, vmax:i64) -> DistancePath
 {
     let (t,_) = shortest_curve_length(ds,v0,vn,a,vmax).bounds().unwrap();
-    return adjust_curve(t, ds, v0, vn, a);
+    adjust_curve(t, ds, v0, vn, a)
 }
 
 /// Describes the constraints for an acceleration curve

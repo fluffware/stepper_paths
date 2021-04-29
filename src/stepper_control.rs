@@ -19,7 +19,7 @@ fn read_reply(inp: &mut dyn Read) -> io::Result<String> {
         match inp.read(& mut buf) {
             Ok(s) => {
                 if s == 1 {
-                    if buf[0] == '\n' as u8 {
+                    if buf[0] == b'\n' {
                         //println!("Reply: '{}'", reply);
                         return Ok(reply);
                     } else {
@@ -35,14 +35,17 @@ fn read_reply(inp: &mut dyn Read) -> io::Result<String> {
 }
 
 fn request_time<T: Read+Write>(serport: &mut T) -> io::Result<i64> {
-    serport.write(b"T\n").unwrap();
-    return read_reply(serport)
+    serport.write_all(b"T\n").unwrap();
+    read_reply(serport)
         .and_then(|r| i64::from_str_radix(&r,10)
-                  .or(Err(io::Error::new(ErrorKind::Other, "Invalid integer in reply"))));
+                  .map_err(|_| {
+                      io::Error::new(ErrorKind::Other,
+                                     "Invalid integer in reply")
+                  }))
 }
 
 
-fn send_cmds<T>(serport: &mut T, t0:i64, events: &Vec<StepperEvent>)
+fn send_cmds<T>(serport: &mut T, t0:i64, events: &[StepperEvent])
     where T: Read + Write
 {
     let mut t = t0;
@@ -59,29 +62,29 @@ fn send_cmds<T>(serport: &mut T, t0:i64, events: &Vec<StepperEvent>)
         }
     }
     
-    serport.write(cmds.as_bytes()).unwrap();
+    serport.write_all(cmds.as_bytes()).unwrap();
     //println!("Cmds: {}", cmds);
 }
 
 const TICKS_PER_SEC:i64 = 128;
-pub fn play_events<T>(serport: &mut T, events: &Vec<StepperEvent>) -> io::Result<()>
+pub fn play_events<T>(serport: &mut T, events: &[StepperEvent]) -> io::Result<()>
     where T: Read + Write
 {
     let mut t = request_time(serport).unwrap() + TICKS_PER_SEC;
     let mut pending = Vec::<StepperEvent>::new();
-    let mut ev_iter = events.into_iter();
+    let mut ev_iter = events.iter();
     loop {
-        while pending.len() < 1 {
+        while pending.is_empty() {
             match ev_iter.next() {
                 Some(e) =>
                     pending.push(e.clone()),
                 None => {break;}
             }
         }
-        if pending.len() == 0 {break;}
+        if pending.is_empty() {break;}
         send_cmds(serport, t, &pending);
         let mut first_full : i32 = -1;
-        for i in 0..pending.len() {
+        for (i,p) in pending.iter().enumerate() {
             match read_reply(serport) {
                 Ok(r) => {
                     //println!("'{}'", r);
@@ -92,14 +95,14 @@ pub fn play_events<T>(serport: &mut T, events: &Vec<StepperEvent>) -> io::Result
                                 first_full = i as i32;
                             }
                         } else {
-                            serport.write("R\n".as_bytes()).unwrap();    
+                            serport.write_all("R\n".as_bytes()).unwrap();    
                             return Err(
                                 io::Error::new(ErrorKind::Other, 
                                                format!("Contoller error: {}",r)));
                         }
                     }
                     if first_full == -1 {
-                        t += pending[i].ticks as i64;
+                        t += p.ticks as i64;
                     }
                 },
                 Err(e) => return  Err(e)
@@ -112,7 +115,7 @@ pub fn play_events<T>(serport: &mut T, events: &Vec<StepperEvent>) -> io::Result
             thread::sleep(time::Duration::from_millis(10));
         }
     }
-    return Ok(());
+    Ok(())
 
 }
 

@@ -10,7 +10,7 @@ use std::fmt::Write as StrWrite;
 extern crate num;
 use std::env;
 
-const PREFIX:&'static str = "
+const PREFIX:&str = "
 void draw_axis(real taxismax, 
 	       real vaxismin, 	       
 	       real vaxismax) {
@@ -39,7 +39,7 @@ import animation;
 animation a;
 ";
 
-const SUFFIX:&'static str = "
+const SUFFIX:&str = "
 for (int i=0; i < c.length; ++i) { 
   save();
   draw(c[i], red);
@@ -59,8 +59,8 @@ fn main() {
     let vmax = args.next().unwrap().parse::<i64>().unwrap();
     let a = args.next().unwrap().parse::<i64>().unwrap();
     let mut f = std::io::stdout();
-    f.write(PREFIX.as_bytes()).unwrap();
-    f.write("path c[] = { ".as_bytes()).unwrap();
+    f.write_all(PREFIX.as_bytes()).unwrap();
+    f.write_all("path c[] = { ".as_bytes()).unwrap();
     let mut dist = String::from("int dist[] = {\n");
     for ds in -70i64 .. 70i64 {
         let path = integer_curve::shortest_curve(ds,v0,vn,a,vmax);
@@ -73,11 +73,11 @@ fn main() {
             v += a as i32 * i as i32;
             write!(f, " -- ({}, {})", t, v).unwrap();
         }
-        f.write(",\n".as_bytes()).unwrap();
+        f.write_all(",\n".as_bytes()).unwrap();
         write!(dist, "{},", ds).unwrap();
     }
     dist += "};\n";
-    f.write("};\n".as_bytes()).unwrap();
-    f.write(dist.as_bytes()).unwrap();
-    f.write(SUFFIX.as_bytes()).unwrap();
+    f.write_all("};\n".as_bytes()).unwrap();
+    f.write_all(dist.as_bytes()).unwrap();
+    f.write_all(SUFFIX.as_bytes()).unwrap();
 }
