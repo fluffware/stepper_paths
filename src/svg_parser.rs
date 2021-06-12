@@ -9,26 +9,27 @@ use stepper_context::CurveSegment;
 use coords::Point;
 use coords::Transform;
 use std::f64::consts::PI;
-
-use nom::types::CompleteStr;
+use nom::Finish;
 
 const SVG_NS : &str = "http://www.w3.org/2000/svg";
 
 mod parser {
-    use nom::digit;
-    use nom::multispace;
     use std::str::FromStr;
     use std::f64::consts::PI;
     use coords::Point;
     use coords::Transform;
-    use nom::types::CompleteStr;
-    
-    type Input<'a> = CompleteStr<'a>;
+    type Input<'a> = &'a str;
+    use nom::character::complete::{
+        multispace0,
+        multispace1,
+        digit0,
+        digit1
+    };
 
-    named!(wsp_opt<Input, Option<Input> >, opt!(multispace));
+    named!(wsp_opt<Input, Input >, recognize!(multispace0));
     named!(comma_wsp<Input, Input >, 
            alt!(recognize!(tuple!(wsp_opt, char!(','), wsp_opt)) 
-                | recognize!(multispace))); 
+                | multispace1)); 
     named!(sign_opt<Input, f64>, map!(opt!(alt!(char!('+') | char!('-'))), 
                                      |s| {
                                          match s {
@@ -37,24 +38,24 @@ mod parser {
                                          }
                                      }));
     named!(fractional_constant<Input, Input>,
-           alt!(recognize!(tuple!(opt!(digit), 
-                                       char!('.'), 
-                                  digit))
-                     | recognize!(tuple!(digit, 
-                                         char!('.')))
+           alt!(recognize!(tuple!(digit0, 
+                                  char!('.'), 
+                                  digit1))
+                | recognize!(tuple!(digit1, 
+                                    char!('.')))
            ));
     named!(floating_point_constant<Input, Input>,
            alt!(recognize!(tuple!(fractional_constant, opt!(exponent))) 
-                | recognize!(tuple!(digit, exponent))));
+                | recognize!(tuple!(digit1, exponent))));
 
     named!(exponent<Input, Input>,
-           recognize!(tuple!(alt!( char!('e') | char!('E')), sign_opt, digit)));
+           recognize!(tuple!(alt!( char!('e') | char!('E')), sign_opt, digit1)));
 
     named!(floating_point_signed<Input, f64>, 
            map_res!(recognize!(tuple!(sign_opt, floating_point_constant)),
-                    |s:Input| {f64::from_str(*s)})
+                    |s:Input| {f64::from_str(s)})
            );
-    named!(integer<Input, f64>, map_res!(recognize!(tuple!(opt!(alt!(char!('+') | char!('-'))), digit)), |s:Input| {f64::from_str(*s)}));
+    named!(integer<Input, f64>, map_res!(recognize!(tuple!(opt!(alt!(char!('+') | char!('-'))), digit1)), |s:Input| {f64::from_str(s)}));
 
     named!(number<Input, f64>, alt!(floating_point_signed | integer)); 
     named!(matrix<Input,Transform>,
@@ -140,7 +141,7 @@ mod parser {
                 | transform
            ));
     
-    named!(pub transform_list<Input, Transform>, preceded!(opt!(multispace),transforms));
+    named!(pub transform_list<Input, Transform>, preceded!(multispace0,transforms));
 
     named!(pub path_command<Input, (char, Vec<f64>)>,
            map!(tuple!(wsp_opt, alt!(char!('m') | char!('M')
@@ -199,27 +200,27 @@ mod parser {
                                 
 }
 
-fn parse_transform(s: &str) -> Result<Transform, nom::Err<CompleteStr, u32> > {
+fn parse_transform(s: &str) -> Result<Transform,nom::error::Error<&str>> {
     
-    match parser::transform_list(CompleteStr(s)) {
+    match parser::transform_list(s).finish() {
         Ok((_,o)) => Ok(o),
         Err(e) => Err(e)
     }
         
 }
 
-fn parse_view_box(s: &str) -> Result<[f64;4], nom::Err<CompleteStr, u32> > {
+fn parse_view_box(s: &str) -> Result<[f64;4], nom::error::Error<&str> > {
     
-    match parser::view_box_args(CompleteStr(s)) {
+    match parser::view_box_args(s).finish() {
         Ok((_,o)) => Ok(o),
         Err(e) => Err(e)
     }
         
 }
 
-fn parse_length(s: &str) -> Result<f64, nom::Err<CompleteStr, u32> > {
+fn parse_length(s: &str) -> Result<f64, nom::error::Error<&str>> {
     
-    match parser::physical_length(CompleteStr(s)) {
+    match parser::physical_length(s).finish() {
         Ok((_,o)) => Ok(o),
         Err(e) => Err(e)
     }
@@ -753,7 +754,7 @@ pub fn parse_document<T: Read>(input :T,t0: &Transform,
                                 return Err("path element has no d attribute".to_string()),
                             Some(d) => {
                                 //println!("path: {}", d);
-                                let mut pos = CompleteStr(&d);
+                                let mut pos = d.as_str();
                                 let mut first_elem = true;
                                 while let Ok((rest, (cmd, args))) = 
                                     parser::path_command(pos) 
