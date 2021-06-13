@@ -18,6 +18,8 @@ pub mod gauss_quadrature;
 pub mod stepper_control;
 pub mod coords;
 pub mod svg_parser;
+pub mod svg_path_parser;
+
 pub mod curves {
     pub mod bezier;
     pub mod linear_curve;
