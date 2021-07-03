@@ -162,6 +162,11 @@ impl std::ops::Neg for Vector {
 
 #[derive(Debug)]
 pub struct Transform {
+    /* Arrange the same way as an SVG matrix
+    [0] [2] [4]
+    [1] [3] [5]
+    0   0   1
+     */
     pub matrix : [f64;6]
 }
 
@@ -174,6 +179,8 @@ fn matrix_mul(a: &[f64; 6], b: &[f64; 6]) -> [f64; 6]
      a[0] * b[4] + a[2]*b[5] + a[4],
      a[1] * b[4] + a[3]*b[5] + a[5]]
 }
+
+const MIN_COLUMN_LENGTH: f64 = 1e-6;
 
 impl Transform {
     pub fn new(m :&[f64; 6]) -> Transform {
@@ -216,6 +223,48 @@ impl Transform {
     {
         Transform{matrix:[1.0, a.tan(), 0.0, 1.0, 0.0, 0.0]}
     }
+
+    pub fn no_translation(&self) -> Transform
+    {
+	let mut matrix = [0.0; 6];
+	matrix[0..4].clone_from_slice(&self.matrix[0..4]);
+	Transform{matrix}
+    }
+
+    /* Split the transform into (translate, scale, rotate, skew_x, skew_y) */
+    pub fn decompose(&self) -> (Vector, Vector, f64, f64, f64)
+    {
+	/* Algorithms by Frédéric Wang
+	(https://frederic-wang.fr/decomposition-of-2d-transform-matrices.html)
+	 */
+	let m = &self.matrix;
+	let rot;
+	let scale;
+	let mut skew_x = 0.0;
+	let mut skew_y = 0.0;
+	let det = m[0] * m[3] - m[1] * m[2];
+	
+	let r2 = m[0] * m[0] + m[1] * m[1];
+	let r = r2.sqrt();
+	if r >= MIN_COLUMN_LENGTH {
+	    scale = Vector{x: r, y: det / r};
+	    rot = m[1].atan2(m[0]);
+	    skew_x = (m[0]*m[2] + m[1] * m[3]).atan2(r2);
+	} else {
+	    let s2 = m[2] * m[2] + m[3] * m[3];
+	    let s = s2.sqrt();
+	    if s >= MIN_COLUMN_LENGTH {
+		rot = m[3].atan2(m[4]);
+		scale = Vector{x: det / s, y: s};
+		skew_y = (m[0]*m[2] + m[1] * m[3]).atan2(s2);
+	    } else {
+		rot = 0.0;
+		    scale = Vector{x: 0.0, y: 0.0};
+	    }
+	}
+
+	(Vector{x: m[4], y: m[5]}, scale, rot, skew_x, skew_y)
+    }
 }
 impl std::cmp::PartialEq for Transform
 {
@@ -251,6 +300,8 @@ impl std::ops::Mul<Vector> for Transform {
 }
 
 pub type Point = Vector;
+#[cfg(test)]
+use std::f64::consts::PI;
 
 #[cfg(test)]
 fn assert_matrix_eq(a:&[f64;6], b:&[f64;6])
@@ -290,4 +341,48 @@ fn test_diff_sign()
     assert!(Vector{x: 1.0, y:1.0}.diff_sign(&Vector{x:1.0, y:4.0}) < 0.0);
     assert!(Vector{x: 1.0, y:-1.0}.diff_sign(&Vector{x:4.0, y:-1.0}) < 0.0);
     assert!(Vector{x: 1.0, y:-1.0}.diff_sign(&Vector{x:1.0, y:-4.0}) > 0.0);
+}
+#[cfg(test)]
+fn check_decompose(tr: Vector, scale: Vector, rot:f64, skew_x: f64, skew_y: f64)
+{
+    let b = Transform::translate(tr.x,tr.y)
+	* Transform::rotate(rot)
+	* Transform::scale_xy(scale.x, scale.y)
+	* Transform::skew_x(skew_x)
+	* Transform::skew_y(skew_y);
+    println!("in:  translate({}) scale({}) rotate({}) skewX({}) skewY({})",
+	     tr, scale, rot, skew_x, skew_y);
+    let (tr, scale, rot, skew_x, skew_y) = b.decompose();
+
+    println!("res: translate({}) scale({}) rotate({}) skewX({}) skewY({})",
+	     tr, scale, rot, skew_x, skew_y);
+    let c = Transform::translate(tr.x,tr.y)
+	* Transform::rotate(rot)
+	* Transform::scale_xy(scale.x, scale.y)
+	* Transform::skew_x(skew_x)
+	* Transform::skew_y(skew_y);
+    println!("in: {:?}\nres: {:?}",b.matrix,c.matrix);
+    assert_transform_eq(&b, &c);
+
+}
+
+#[test]
+fn test_decompose()
+{
+    let mut a = Transform::identity();
+    assert_eq!(a.decompose(), (Vector{x: 0.0, y:0.0}, Vector{x: 1.0, y:1.0},
+			       0.0,0.0,0.0));
+    check_decompose(Vector{x: 3.0, y:7.0}, Vector{x: 1.0, y:1.0},
+		    1.0, 0.0, 0.0);
+    check_decompose(Vector{x: 3.0, y:7.0}, Vector{x: -2.0, y:3.0},
+		    4.0*PI/5.0, -1.0, 0.0);
+    
+    let b = Transform{matrix: [0.0, 1.0, 0.0, 2.0, -1.5, 8.0]};
+    let (tr, scale, rot, skew_x, skew_y) = b.decompose();
+    let c = Transform::translate(tr.x,tr.y)
+	* Transform::rotate(rot)
+	* Transform::scale_xy(scale.x, scale.y)
+	* Transform::skew_x(skew_x)
+	* Transform::skew_y(skew_y);
+    assert_transform_eq(&b, &c);
 }

@@ -4,7 +4,7 @@ extern crate xml;
 
 use paths::stepper_context::StepperContext;
 use paths::stepper_control::play_events;
-use paths::stepper_config;
+use paths::stepper_config_parser;
 
 use serial::core::SerialDevice;
 use serial::core::SerialPortSettings;
@@ -24,8 +24,6 @@ extern crate getopts;
 use getopts::Options;
 
 
-// const BEZIER_CIRCLE_C: f64 = 0.551915024494;
-//const WEIGHT : i32 = 160;
 fn usage(prg: &str, opts: Options)
 {
     let brief = format!("Usage: {} [options] FILE", prg);
@@ -34,10 +32,6 @@ fn usage(prg: &str, opts: Options)
 const INKSCAPE_NS: &str = "http://www.inkscape.org/namespaces/inkscape";
 const SVG_NS : &str = "http://www.w3.org/2000/svg";
 
-const TICKS_PER_SECOND: i64 = 128;
-const S_SCALE: i64 = 2*TICKS_PER_SECOND*TICKS_PER_SECOND;
-
-const STEPS_PER_MM:f64 = 60.0;
  
 
 fn main() {
@@ -70,7 +64,8 @@ fn main() {
         return;
     }
 
-    let mut config =stepper_config::XyStepperConfig {
+    let config;
+    /*
         ticks_per_second: TICKS_PER_SECOND as u32,
         stepper_x: 
         stepper_config::StepperConfig {
@@ -90,15 +85,21 @@ fn main() {
             pwm_period: 256,
             alignment_intensity: 5
         }
-    };
+    };*/
     if let Some(filename) = matches.opt_str("config")
     {
-        if let Err(e) = stepper_config::read_config(&mut config, &filename)
-        {
-            println!("{}", e);
+        config = match stepper_config_parser::read_config(&filename) {
+            Err(e) =>
+            {
+                println!("{}", e);
             return
-        }
-    };
+            },
+            Ok(c) => c
+        };
+    } else {
+        println!("No configuration file");
+        return;
+    }
     
     let port_name = matches.opt_str("device");
     
@@ -148,7 +149,7 @@ fn main() {
 
     
     let v_draw = match matches.opt_str("draw-speed") {
-        Some(arg) => match f64::from_str(&arg) {
+        Some(arg) => match str::parse(&arg) {
             Ok(value) => value,
             Err(err) => {
                 println!("Invalid draw velocity: {}", err);
@@ -159,7 +160,7 @@ fn main() {
     };
 
     let n_repeat = match matches.opt_str("repeat") {
-        Some(arg) => match u32::from_str_radix(&arg, 10) {            
+        Some(arg) => match str::parse(&arg) {            
             Ok(value) if value >= 1 => value,
             Ok(_)  => {
                 println!("Repeat must be >= 1");
@@ -174,7 +175,7 @@ fn main() {
     };
     
     let weight = match matches.opt_str("intensity") {
-        Some(arg) => match i32::from_str_radix(&arg, 10) {
+        Some(arg) => match str::parse(&arg) {
             Ok(value) if (0..=100).contains(&value) => value,
             Ok(_)  => {
                 println!("Invalid intensity, must be 0 - 100c");
@@ -217,9 +218,7 @@ fn main() {
         &[ax_max, ay_max],
         &[vx_max, vy_max],
         &[config.stepper_x.steps_per_millimeter,
-          config.stepper_y.steps_per_millimeter],
-        &[config.stepper_x.steps_per_millimeter / 2.0,
-          config.stepper_y.steps_per_millimeter / 2.0]);
+          config.stepper_y.steps_per_millimeter]);
     ctxt.set_weight(weight);
     
     let file = match File::open(&file_name) {
@@ -290,7 +289,7 @@ fn main() {
                 
     println!("Pos: {:?}",ctxt.position());
     ctxt.step_goto(0,0);
-    println!("End time: {} s", ctxt.ticks() / (TICKS_PER_SECOND as u64));
+    println!("End time: {} s", ctxt.ticks() / (config.ticks_per_second as u64));
     if let Some(mut serport) = serport {
         let events = ctxt.events();
         

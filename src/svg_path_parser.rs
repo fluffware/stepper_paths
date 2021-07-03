@@ -16,6 +16,7 @@ mod parser {
         multispace1,
         digit0,
         digit1,
+        one_of,
         self
     };
 
@@ -25,14 +26,14 @@ mod parser {
                                   call!(complete::char(',')),
                                   wsp_opt)) 
                 | multispace1)); 
-    named!(sign_opt<Input, f64>, map!(opt!(alt!(call!(complete::char('+')) 
-                                                | call!(complete::char('-')))), 
+    named!(sign_opt<Input, f64>, map!(opt!(one_of("+-")),
                                       |s| {
                                           match s {
                                               Some('-') => -1.0,
                                              Some(_) | None => 1.0
                                           }
                                       }));
+    
     named!(fractional_constant<Input, Input>,
            alt!(recognize!(tuple!(digit0, 
                                   call!(complete::char('.')), 
@@ -53,7 +54,7 @@ mod parser {
            map_res!(recognize!(tuple!(sign_opt, floating_point_constant)),
                     |s:Input| {f64::from_str(s)})
            );
-    named!(integer<Input, f64>, map_res!(recognize!(tuple!(opt!(alt!(char!('+') | char!('-'))), digit1)), |s:Input| {f64::from_str(s)}));
+    named!(integer<Input, f64>, map_res!(recognize!(tuple!(opt!(one_of("+-")), digit1)), |s:Input| {f64::from_str(s)}));
 
     named!(number<Input, f64>, alt!(floating_point_signed | integer)); 
     named!(matrix<Input,Transform>,
@@ -142,20 +143,11 @@ mod parser {
     named!(pub transform_list<Input, Transform>, preceded!(multispace0,transforms));
 
     named!(pub path_command<Input, (char, Vec<f64>)>,
-               tuple!(preceded!(wsp_opt, alt!(char!('m') | char!('M')
-                                              | char!('z') | char!('Z')
-                                              | char!('l') | char!('L')
-                                              | char!('h') | char!('H')
-                                              | char!('v') | char!('V')
-                                              | char!('c') | char!('C')
-                                              | char!('s') | char!('S')
-                                              | char!('q') | char!('Q')
-                                              | char!('t') | char!('T')
-                                              | char!('a') | char!('A'))),
-                      preceded!(wsp_opt,
-                                separated_list0!(comma_wsp, number))));
-
-
+           tuple!(preceded!(wsp_opt, one_of("mMzZlLhHvVcCsSqQtTaA")),
+                            preceded!(wsp_opt,
+                                      separated_list0!(comma_wsp, number))));
+           
+    
     named!(pub view_box_args<Input, [f64;4]>,
            map!(tuple!(wsp_opt, number, comma_wsp, number, comma_wsp, 
                     number, comma_wsp, number, wsp_opt),
@@ -184,8 +176,17 @@ mod parser {
                      None => value
                  }
              }));
-                                
+
+    #[test]
+    fn test_number() 
+    {
+        assert_eq!(number("38.5"), Ok(("", 38.5)));
+        assert_eq!(number("-38.5e1"), Ok(("", -385.0)));
+        let res = number("");
+        assert_eq!(res, Err(nom::Err::Error(nom::error::Error{input: "", code: nom::error::ErrorKind::Alt})));
+    }
 }
+
 
 pub fn parse_transform(s: &str) -> Result<Transform,nom::error::Error<&str>> {
     
@@ -230,6 +231,14 @@ impl PathContext
             start: Point{x: 0.0, y: 0.0},
             last_control: None
         }
+    }
+}
+
+impl Default for PathContext
+{
+    fn default() -> Self
+    {
+        Self::new()
     }
 }
 
@@ -694,20 +703,28 @@ fn build_path(ctxt: &mut PathContext, cmd: char, args: &[f64],
 
 pub fn parse_path(path_str: &str, path_ctxt: &mut PathContext,
                   transform: &Transform, segs: &mut Vec<CurveSegment>)
-                  -> Result<(), Box<dyn Error + 'static>>
+                  -> Result<(), Box<dyn Error + Send + Sync + 'static>>
 {
     let mut pos = path_str;
     let mut first_elem = true;
-    while let Ok((rest, (cmd, args))) = 
-        parser::path_command(pos) 
+    loop
     {
-        build_path(path_ctxt,
-                   cmd, &args,
-                   segs, &transform,
-                   first_elem)?;
-        //println!("rest: {:?}", rest);
-        pos = rest;
-        first_elem = false;
+        pos = pos.trim_start();
+        if pos.is_empty() {break;}
+        match parser::path_command(pos) {
+            Ok((rest, (cmd, args))) => {
+                build_path(path_ctxt,
+                           cmd, &args,
+                           segs, &transform,
+                           first_elem)?;
+                //println!("rest: {:?}", rest);
+                pos = rest;
+                first_elem = false;
+            },
+            Err(e) => {
+                panic!("SVG path parser returned error: {:?}",e)
+            }
+        }
     }
     Ok(())
 }
@@ -898,4 +915,12 @@ fn test_viewbox_parser()
 {
     let s = "0 0 210 297";
     assert_eq!(parser::view_box_args(s), Ok(("", [0.0,0.0,210.0, 297.0])));
+}
+
+#[test]
+fn test_path_parser() 
+{
+    let res = parser::path_command("Z");
+    assert_eq!(res, Ok(("", ('Z', Vec::new()))));
+
 }

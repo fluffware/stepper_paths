@@ -5,7 +5,7 @@ extern crate image;
 
 use paths::stepper_context::StepperContext;
 use paths::stepper_control::play_events;
-use paths::stepper_config;
+use paths::stepper_config_parser;
 
 use serial::core::SerialDevice;
 use serial::core::SerialPortSettings;
@@ -28,10 +28,6 @@ fn usage(prg: &str, opts: Options)
     print!("{}", opts.usage(&brief));
 }
 
-const TICKS_PER_SECOND: i64 = 128;
-const S_SCALE: i64 = 2*TICKS_PER_SECOND*TICKS_PER_SECOND;
-
-const STEPS_PER_MM:f64 = 60.0;
 
 const DEFAULT_SPOT_DIAMETER: f64 = 0.2;
 const DEFAULT_WIDTH: f64 = 20.0;
@@ -90,35 +86,21 @@ fn main() {
     }
 
 
-    let mut config =stepper_config::XyStepperConfig {
-        ticks_per_second: TICKS_PER_SECOND as u32,
-        stepper_x: 
-        stepper_config::StepperConfig {
-            steps_per_millimeter: STEPS_PER_MM * S_SCALE as f64,
-            max_velocity: 50.0,
-            max_acceleration: 50.0
-        },
-        stepper_y:
-        stepper_config::StepperConfig {
-            steps_per_millimeter: STEPS_PER_MM * S_SCALE as f64,
-            max_velocity: 50.0,
-            max_acceleration: 50.0
-        },
-        laser:
-        stepper_config::LaserConfig {
-            max_intensity: 256,
-            pwm_period: 256,
-            alignment_intensity: 5
-        }
-    };
+    let config;
     if let Some(filename) = matches.opt_str("config")
     {
-        if let Err(e) = stepper_config::read_config(&mut config, &filename)
-        {
-            println!("{}", e);
+        config = match stepper_config_parser::read_config(&filename) {
+            Err(e) =>
+            {
+                println!("{}", e);
             return
-        }
-    };
+            },
+            Ok(c) => c
+        };
+    } else {
+        println!("No configuration file");
+        return;
+    }
 
     let port_name = matches.opt_str("device");
 
@@ -133,7 +115,7 @@ fn main() {
     let mut vy_max = (vy_scale.abs() * config.stepper_y.max_velocity).round() as i32;
     
     if let Some(arg) = matches.opt_str("v-max") {
-        match f64::from_str(&arg) {
+        match str::parse::<f64>(&arg) {
             Ok(value) => {
                 vx_max = (vx_scale.abs() * value) as i32;
                 vy_max = (vy_scale.abs() * value) as i32;
@@ -178,7 +160,7 @@ fn main() {
     };
     
     let weight = match matches.opt_str("intensity") {
-        Some(arg) => match i32::from_str_radix(&arg, 10) {
+        Some(arg) => match str::parse(&arg) {
             Ok(value) if (0..=100).contains(&value) => value,
             Ok(_)  => {
                 println!("Invalid intensity, must be 0 - 100c");
@@ -284,11 +266,11 @@ fn main() {
                                        &[vx_max, vy_max],
                                        &[config.stepper_x.steps_per_millimeter,
                                          config.stepper_y.steps_per_millimeter],
-                                       &[vx_scale, vy_scale]);
+    );
     ctxt.set_weight(weight);
 
     let width = width_mm *config.stepper_x.steps_per_millimeter;
-    let res_x = (width * TICKS_PER_SECOND as f64 / (x_pixels as f64 * (v_draw * config.stepper_x.steps_per_millimeter))).round() as u32;
+    let res_x = (width * config.ticks_per_second as f64 / (x_pixels as f64 * (v_draw * config.stepper_x.steps_per_millimeter))).round() as u32;
     let res_x = u32::max(1, res_x);
     let interval = x_pixels * res_x;
     let v_x = (width / (2*interval) as f64).round() as i32;
@@ -354,7 +336,7 @@ fn main() {
     
    
     ctxt.step_goto(0,0);
-    println!("End time: {} s", ctxt.ticks() / (TICKS_PER_SECOND as u64));
+    println!("End time: {} s", ctxt.ticks() / (config.ticks_per_second as u64));
     if let Some(mut serport) = serport {
         let events = ctxt.events();
         

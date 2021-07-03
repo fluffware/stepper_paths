@@ -7,7 +7,7 @@ use num::Integer;
 use std::u64;
 //use std::convert::TryFrom;
 use curve_approx::CurveInfo;
-use coords::{Point, Vector};
+use coords::{Point, Vector, Transform};
 use curves;
 use std::error::Error;
 
@@ -25,6 +25,37 @@ pub enum CurveSegment
     Arc(f64, f64, f64, f64, f64) // rx,ry, start, end, rotation
 }
 
+impl CurveSegment
+{
+    pub fn transform(&self, trans: Transform) -> CurveSegment {
+	match self {
+	    CurveSegment::GoTo(p) => CurveSegment::GoTo(trans * *p),
+	    CurveSegment::GoToRel(p) =>
+		CurveSegment::GoToRel(trans.no_translation() * *p),
+	    CurveSegment::LineTo(p) => CurveSegment::LineTo(trans * *p),
+	    CurveSegment::LineToRel(p) =>
+		CurveSegment::LineToRel(trans.no_translation() * *p),
+	    CurveSegment::CurveTo(p2, c1, c2) =>
+		CurveSegment::CurveTo(trans * *p2, 
+				      trans.no_translation() * *c1,
+				      trans.no_translation() * *c2),
+	    CurveSegment::CurveToRel(p2, c1, c2) => {
+		let ntrans = trans.no_translation();
+		CurveSegment::CurveToRel(ntrans * *p2, 
+					 ntrans * *c1,
+					 ntrans * *c2)
+	    },
+	    CurveSegment::Arc(rx,ry, start, end, rotation) => {
+		let (_, scale, trans_rot, _, _) = trans.decompose();
+		
+		CurveSegment::Arc(scale.x * *rx,
+				  scale.y * *ry,
+				  *start, *end,
+				  *rotation + trans_rot)
+	    }
+	}
+    }
+}
 
 #[derive(Debug, Clone)]
 pub enum Command
@@ -78,7 +109,7 @@ pub struct StepperContext
 
     
     // Minimum cosine value for an angle between endpoints of two curves to
-    // allow connecting then
+    // allow connecting them
     min_cos_connect: f64
 }
 
@@ -150,9 +181,13 @@ const INITIAL_MIN_COS_CONNECT: f64 = 0.99619;
 
 impl StepperContext {
     pub fn new(a_max: &[i32;N_CHANNELS], v_max: &[i32;N_CHANNELS],
-               step_scale: &[f64;N_CHANNELS],  v_scale: &[f64;N_CHANNELS])
+               step_scale: &[f64;N_CHANNELS])
                -> StepperContext
     {
+	let mut v_scale = [0.0;N_CHANNELS];
+	for i in 0..N_CHANNELS {
+	    v_scale[i] = step_scale[i] / 2.0;
+	}
         StepperContext {channels: [ChannelContext {pos:0,v:0,ticks:0} ; 
                                    N_CHANNELS] ,
                         step_a_max: *a_max, step_v_max: *v_max,
@@ -161,7 +196,7 @@ impl StepperContext {
                         move_weight: 0,
                         curve_weight: 255,
                         step_scale: *step_scale,
-                        v_scale: *v_scale,
+                        v_scale,
                         min_cos_connect: INITIAL_MIN_COS_CONNECT
         }
     }
@@ -465,7 +500,7 @@ impl StepperContext {
 
  
     #[allow(clippy::unnecessary_wraps)]
-    fn draw_curve(&mut self, start: Point, curve: &mut curves::concat_curve::ConcatCurve, v: f64) -> Result<[i64;2], Box<dyn Error>>
+    fn draw_curve(&mut self, start: Point, curve: &mut curves::concat_curve::ConcatCurve, v: f64) -> Result<[i64;2], Box<dyn Error + Send + Sync>>
     {
         if !curve.is_empty() {
             println!("Approximating curve: {} {:?}", start, curve);
@@ -486,7 +521,7 @@ impl StepperContext {
 
     
     pub fn draw_curves(&mut self, segs: &[CurveSegment], v: f64)
-        -> Result<[i64;2], Box<dyn Error>>
+        -> Result<[i64;2], Box<dyn Error + Send + Sync>>
     {
         let mut max_err = [0i64,0i64];
         let mut iter = segs.iter();
@@ -599,6 +634,16 @@ impl StepperContext {
         }
         &self.events
     }
+
+    pub fn reset(&mut self)
+    {
+	self.events.clear();
+	for i in 0..N_CHANNELS {
+	    self.channels[i] = ChannelContext{pos: 0, v: 0, ticks: 0};
+	}
+	self.event_ticks = 0;
+	
+    }
 }
 
 #[test]
@@ -606,8 +651,7 @@ fn test_approx_curve_line()
 {
     let mut ctxt = StepperContext::new(&[10, 10],
                                        &[10, 10],
-                                       &[3.0, 7.0],
-                                       &[1.5, 3.5]);
+                                       &[3.0, 7.0]);
 
     let line = curves::line::Line::new(Point{x: 23.0, y: 45.0});
     ctxt.approx_curve(Point{x: 0.0, y:0.0}, &line, 1.0);
@@ -622,8 +666,7 @@ fn test_approx_curve_ellipse()
 {
     let mut ctxt = StepperContext::new(&[10, 10],
                                        &[10, 10],
-                                       &[3.0, 7.0],
-                                       &[1.5, 3.5]);
+                                       &[3.0, 7.0]);
 
     let circle = curves::circle_segment::CircleSegment::new(670.0, 0.0, PI/2.0);
     ctxt.approx_curve(Point{x: 0.0, y:0.0}, &circle, 30.0);

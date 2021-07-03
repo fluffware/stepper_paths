@@ -37,7 +37,7 @@ fn read_reply(inp: &mut dyn Read) -> io::Result<String> {
 fn request_time<T: Read+Write>(serport: &mut T) -> io::Result<i64> {
     serport.write_all(b"T\n").unwrap();
     read_reply(serport)
-        .and_then(|r| i64::from_str_radix(&r,10)
+        .and_then(|r| str::parse(&r)
                   .map_err(|_| {
                       io::Error::new(ErrorKind::Other,
                                      "Invalid integer in reply")

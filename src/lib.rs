@@ -2,6 +2,7 @@ extern crate num;
 #[macro_use]
 extern crate nom;
 extern crate xml;
+extern crate serde;
 
 #[cfg(test)]
 #[macro_use]
@@ -14,6 +15,7 @@ pub mod acc_vector;
 pub mod stepper_context;
 pub mod curve_approx;
 pub mod stepper_config;
+pub mod stepper_config_parser;
 pub mod gauss_quadrature;
 pub mod stepper_control;
 pub mod coords;

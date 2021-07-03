@@ -14,7 +14,7 @@ use svg_path_parser::PathContext;
 const SVG_NS : &str = "http://www.w3.org/2000/svg";
 
 type DynResult<T> = 
-    std::result::Result<T, Box<dyn std::error::Error + 'static>>;
+    std::result::Result<T, Box<dyn std::error::Error + Send + Sync + 'static>>;
 
 pub fn parse_document<T: Read>(input :T,t0: &Transform,
                                  filter: Box<dyn Fn(&OwnedName,
