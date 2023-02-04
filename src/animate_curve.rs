@@ -1,16 +1,15 @@
-
-extern crate libc;
 extern crate core;
+extern crate libc;
 extern crate paths;
-use paths::integer_curve;
 use paths::acc_vector::AccSegment;
-use std::io::Write;
+use paths::integer_curve;
 use std::fmt::Write as StrWrite;
+use std::io::Write;
 
 extern crate num;
 use std::env;
 
-const PREFIX:&str = "
+const PREFIX: &str = "
 void draw_axis(real taxismax, 
 	       real vaxismin, 	       
 	       real vaxismax) {
@@ -39,7 +38,7 @@ import animation;
 animation a;
 ";
 
-const SUFFIX:&str = "
+const SUFFIX: &str = "
 for (int i=0; i < c.length; ++i) { 
   save();
   draw(c[i], red);
@@ -62,13 +61,17 @@ fn main() {
     f.write_all(PREFIX.as_bytes()).unwrap();
     f.write_all("path c[] = { ".as_bytes()).unwrap();
     let mut dist = String::from("int dist[] = {\n");
-    for ds in -70i64 .. 70i64 {
-        let path = integer_curve::shortest_curve(ds,v0,vn,a,vmax);
+    for ds in -70i64..70i64 {
+        let path = integer_curve::shortest_curve(ds, v0, vn, a, vmax);
         let seq = path.acc_seq();
         let mut t = 0;
         let mut v = v0 as i32;
         write!(f, "({}, {})", t, v).unwrap();
-        for &AccSegment{interval: i, acc: a} in &seq {
+        for &AccSegment {
+            interval: i,
+            acc: a,
+        } in &seq
+        {
             t += i;
             v += a as i32 * i as i32;
             write!(f, " -- ({}, {})", t, v).unwrap();

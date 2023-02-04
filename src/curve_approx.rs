@@ -1,10 +1,9 @@
-use coords::{Vector,Point};
+use coords::{Point, Vector};
 
-pub trait CurveInfo
-{
+pub trait CurveInfo {
     /// Returns total length of curve
     fn length(&self) -> f64;
-    
+
     /// Returns coordinates and direction at given position along the curve.
     /// Direction is normalized. If `pos` is 0.0 then the return
     /// cordinates should be (0,0), i.e the curve always starts from
