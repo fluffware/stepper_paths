@@ -21,8 +21,8 @@ pub fn polyval(polynom: &[f64], t: f64) -> f64 {
 fn polyder(polynom: &[f64]) -> Vec<f64> {
     let len = polynom.len();
     let mut deriv = Vec::with_capacity(len - 1);
-    for i in 1..len {
-        deriv.push(polynom[i] * (i as f64));
+    for (i,p) in polynom[1..len].iter().enumerate() {
+        deriv.push(p * (i as f64));
     }
     deriv
 }
@@ -31,8 +31,8 @@ fn polyint(polynom: &[f64]) -> Vec<f64> {
     let len = polynom.len();
     let mut int = Vec::with_capacity(len + 1);
     int.push(0.0);
-    for i in 0..len {
-        int.push(polynom[i] / ((i + 1) as f64));
+    for (i,p) in  polynom.iter().enumerate() {
+        int.push(*p / ((i + 1) as f64));
     }
     int
 }

@@ -79,56 +79,56 @@ mod parser {
     }
     type ParseResult<'a, T> = IResult<&'a str, T, ParseError<'a>>;
 
-    fn wsp_opt<'a>(input: &'a str) -> ParseResult<'a, &str> {
+    fn wsp_opt(input: &str) -> ParseResult<&str> {
         multispace0(input)
     }
 
-    fn comma_wsp<'a>(input: &'a str) -> ParseResult<'a, &str> {
+    fn comma_wsp(input: &str) -> ParseResult<&str> {
         alt((
             recognize(delimited(wsp_opt, complete::char(','), wsp_opt)),
             multispace1,
         ))(input)
     }
 
-    fn sign_opt<'a>(input: &'a str) -> ParseResult<'a, f64> {
+    fn sign_opt(input: & str) -> ParseResult<f64> {
         map(opt(one_of("+-")), |s| match s {
             Some('-') => -1.0,
             Some(_) | None => 1.0,
         })(input)
     }
-    fn fractional_constant<'a>(input: &'a str) -> ParseResult<'a, &'a str> {
+    fn fractional_constant(input: &str) -> ParseResult<&str> {
         alt((
             recognize(separated_pair(digit0, complete::char('.'), digit1)),
             recognize(terminated(digit1, complete::char('.'))),
         ))(input)
     }
-    fn exponent<'a>(input: &'a str) -> ParseResult<'a, &'a str> {
+    fn exponent(input: &str) -> ParseResult<&str> {
         recognize(tuple((one_of("eE"), sign_opt, digit1)))(input)
     }
 
-    fn floating_point_constant<'a>(input: &'a str) -> ParseResult<'a, &'a str> {
+    fn floating_point_constant(input: &str) -> ParseResult<&str> {
         alt((
             recognize(tuple((fractional_constant, opt(exponent)))),
             recognize(tuple((digit1, exponent))),
         ))(input)
     }
 
-    fn floating_point_signed<'a>(input: &'a str) -> ParseResult<'a, f64> {
+    fn floating_point_signed(input: &str) -> ParseResult<f64> {
         map_res(
             recognize(tuple((sign_opt, floating_point_constant))),
-            |s: &str| f64::from_str(s),
+            f64::from_str,
         )(input)
     }
 
-    fn integer<'a>(input: &'a str) -> ParseResult<'a, f64> {
+    fn integer(input: &str) -> ParseResult<f64> {
         map_res(recognize(tuple((opt(one_of("+-")), digit1))), |s: &str| {
             f64::from_str(s)
         })(input)
     }
-    fn number<'a>(input: &'a str) -> ParseResult<'a, f64> {
+    fn number(input: &str) -> ParseResult<f64> {
         alt((floating_point_signed, integer))(input)
     }
-    fn matrix<'a>(input: &'a str) -> ParseResult<'a, Transform> {
+    fn matrix(input: &str) -> ParseResult<Transform> {
         delimited(
             tuple((tag("matrix"), wsp_opt, complete::char('('), wsp_opt)),
             map(
@@ -143,7 +143,7 @@ mod parser {
             tuple((wsp_opt, complete::char(')'))),
         )(input)
     }
-    fn translate<'a>(input: &'a str) -> ParseResult<'a, Transform> {
+    fn translate(input: &str) -> ParseResult<Transform> {
         delimited(
             tuple((tag("translate"), wsp_opt, complete::char('('), wsp_opt)),
             map(pair(number, opt(preceded(comma_wsp, number))), |(x, y)| {
@@ -156,7 +156,7 @@ mod parser {
         )(input)
     }
 
-    fn scale<'a>(input: &'a str) -> ParseResult<'a, Transform> {
+    fn scale(input: &str) -> ParseResult<Transform> {
         delimited(
             tuple((tag("scale"), wsp_opt, complete::char('('), wsp_opt)),
             map(pair(number, opt(preceded(comma_wsp, number))), |(x, y)| {
@@ -172,7 +172,7 @@ mod parser {
         )(input)
     }
 
-    fn rotate<'a>(input: &'a str) -> ParseResult<'a, Transform> {
+    fn rotate(input: &str) -> ParseResult<Transform> {
         delimited(
             tuple((tag("rotate"), wsp_opt, complete::char('('), wsp_opt)),
             map(
@@ -194,7 +194,7 @@ mod parser {
             pair(wsp_opt, complete::char(')')),
         )(input)
     }
-    fn skewx<'a>(input: &'a str) -> ParseResult<'a, Transform> {
+    fn skewx(input: &str) -> ParseResult<Transform> {
         delimited(
             tuple((tag("skewX"), wsp_opt, complete::char('('), wsp_opt)),
             map(number, |a| {
@@ -205,7 +205,7 @@ mod parser {
         )(input)
     }
 
-    fn skewy<'a>(input: &'a str) -> ParseResult<'a, Transform> {
+    fn skewy(input: &str) -> ParseResult<Transform> {
         delimited(
             tuple((tag("skewY"), wsp_opt, complete::char('('), wsp_opt)),
             map(number, |a| {
@@ -216,11 +216,11 @@ mod parser {
         )(input)
     }
 
-    fn transform<'a>(input: &'a str) -> ParseResult<'a, Transform> {
+    fn transform(input: &str) -> ParseResult<Transform> {
         alt((matrix, translate, scale, rotate, skewx, skewy))(input)
     }
 
-    fn transforms<'a>(input: &'a str) -> ParseResult<'a, Transform> {
+    fn transforms(input: &str) -> ParseResult<Transform> {
         alt((
             map(
                 separated_pair(transform, comma_wsp, transforms),
@@ -230,18 +230,18 @@ mod parser {
         ))(input)
     }
 
-    pub fn transform_list<'a>(input: &'a str) -> ParseResult<'a, Transform> {
+    pub fn transform_list(input: &str) -> ParseResult<Transform> {
         preceded(multispace0, transforms)(input)
     }
 
-    pub fn path_command<'a>(input: &'a str) -> ParseResult<'a, (char, Vec<f64>)> {
+    pub fn path_command(input: &str) -> ParseResult<(char, Vec<f64>)> {
         pair(
             preceded(wsp_opt, one_of("mMzZlLhHvVcCsSqQtTaA")),
             preceded(wsp_opt, separated_list0(comma_wsp, number)),
         )(input)
     }
 
-    pub fn view_box_args<'a>(input: &'a str) -> ParseResult<'a, [f64; 4]> {
+    pub fn view_box_args(input: &str) -> ParseResult<[f64; 4]> {
         map(
             tuple((
                 wsp_opt, number, comma_wsp, number, comma_wsp, number, comma_wsp, number, wsp_opt,
@@ -254,7 +254,7 @@ mod parser {
     const PX: f64 = 1.0;
     const PT: f64 = INCH / 72.0;
 
-    pub fn length_unit<'a>(input: &'a str) -> ParseResult<'a, f64> {
+    pub fn length_unit(input: &str) -> ParseResult<f64> {
         alt((
             value(1.0, tag("mm")),
             value(10.0, tag("cm")),
@@ -265,7 +265,7 @@ mod parser {
         ))(input)
     }
 
-    pub fn physical_length<'a>(input: &'a str) -> ParseResult<'a, f64> {
+    pub fn physical_length(input: &str) -> ParseResult<f64> {
         map(
             tuple((
                 wsp_opt,
@@ -489,7 +489,7 @@ fn build_path(
 ) -> Result<(), String> {
     //println!("{}: {:?}", cmd, args);
 
-    let rel = ('a'..='z').contains(&cmd);
+    let rel = cmd.is_ascii_lowercase();
     match cmd {
         'm' | 'M' => {
             if args.len() < 2 {

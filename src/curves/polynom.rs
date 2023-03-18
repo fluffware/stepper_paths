@@ -14,8 +14,8 @@ where
 {
     let mut sum = poly[0];
     let mut f = t;
-    for i in 1..n {
-        sum = sum + f * poly[i];
+    for p in poly[1..n].iter() {
+        sum = sum + f * *p;
         f = f * t;
     }
     sum
@@ -49,7 +49,7 @@ pub trait PolynomCoef:
 
 impl PolynomCoef for f64 {
     fn close_to_zero(a: f64) -> bool {
-        a <= 10.0 * f64::EPSILON && a >= -10.0 * f64::EPSILON
+        (-10.0 * f64::EPSILON ..= 10.0 * f64::EPSILON).contains(&a)
     }
 }
 
