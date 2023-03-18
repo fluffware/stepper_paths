@@ -183,7 +183,7 @@ fn test_linear_curve_setup() {
         split_factor: 0.7,
         max_length: 0.001,
     });
-    let linear = LinearCurve::new(curve, 0.0, 1.0);
+    let _linear = LinearCurve::new(curve, 0.0, 1.0);
 }
 
 #[test]
@@ -193,7 +193,7 @@ fn test_linear_curve_length() {
         max_length: 0.001,
     });
 
-    let mut linear = LinearCurve::new(curve, 0.0, 1.0);
+    let linear = LinearCurve::new(curve, 0.0, 1.0);
     let len = linear.length();
     //println!("{:?}",linear.node);
     assert_relative_eq!(len, 1.0, max_relative = 0.0000001);

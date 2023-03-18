@@ -1,173 +1,284 @@
 use coords::Point;
 use coords::Transform;
-use nom::Finish;
 use std::error::Error;
 use std::f64::consts::PI;
 use stepper_context::CurveSegment;
+use nom::Finish;
 
 mod parser {
     use coords::Point;
     use coords::Transform;
-    use std::f64::consts::PI;
-    use std::str::FromStr;
-    type Input<'a> = &'a str;
+    use nom::branch::alt;
+    use nom::bytes::complete::tag;
     use nom::character::complete::{self, digit0, digit1, multispace0, multispace1, one_of};
+    use nom::combinator::{map, map_res, opt, recognize, value};
+    use nom::error::FromExternalError;
+    use nom::multi::separated_list0;
+    use nom::sequence::{delimited, pair, preceded, separated_pair, terminated, tuple};
+    use nom::IResult;
+    use std::f64::consts::PI;
+    use std::fmt::{self, Display, Formatter};
+    use std::num::ParseFloatError;
+    use std::str::FromStr;
 
-    named!(wsp_opt<Input, Input >, call!(multispace0));
-    named!(comma_wsp<Input, Input >, 
-           alt!(recognize!(tuple!(wsp_opt, 
-                                  call!(complete::char(',')),
-                                  wsp_opt)) 
-                | multispace1));
-    named!(sign_opt<Input, f64>, map!(opt!(one_of("+-")),
-    |s| {
-        match s {
-            Some('-') => -1.0,
-           Some(_) | None => 1.0
+    #[derive(Debug, PartialEq)]
+    pub enum ParseErrorKind {
+        InvalidNumber,
+        Nom(nom::error::ErrorKind),
+    }
+    impl Display for ParseErrorKind {
+        fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), fmt::Error> {
+            match self {
+		ParseErrorKind::InvalidNumber => {
+		    write!(f, "Invalid number")
+		}
+                ParseErrorKind::Nom(err) => {
+                    write!(f, "{}", err.description())
+                }
+            }
         }
-    }));
+    }
 
-    named!(fractional_constant<Input, Input>,
-    alt!(recognize!(tuple!(digit0,
-                           call!(complete::char('.')),
-                           digit1))
-         | recognize!(tuple!(digit1,
-                             call!(complete::char('.'))))
-    ));
-    named!(floating_point_constant<Input, Input>,
-           alt!(recognize!(tuple!(fractional_constant, opt!(exponent))) 
-                | recognize!(tuple!(digit1, exponent))));
+    #[derive(Debug, PartialEq)]
+    pub struct ParseError<'a> {
+        input: &'a str,
+        kind: ParseErrorKind,
+    }
+    impl std::error::Error for ParseError<'_> {}
 
-    named!(exponent<Input, Input>,
-           recognize!(tuple!(alt!(call!(complete::char('e')) 
-                                  | call!(complete::char('E'))),
-                             sign_opt, digit1)));
+    impl Display for ParseError<'_> {
+        fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), fmt::Error> {
+            Display::fmt(&self.kind, f)
+        }
+    }
 
-    named!(floating_point_signed<Input, f64>,
-    map_res!(recognize!(tuple!(sign_opt, floating_point_constant)),
-             |s:Input| {f64::from_str(s)})
-    );
-    named!(integer<Input, f64>, map_res!(recognize!(tuple!(opt!(one_of("+-")), digit1)), |s:Input| {f64::from_str(s)}));
+    impl<'a> nom::error::ParseError<&'a str> for ParseError<'a> {
+        fn from_error_kind(input: &'a str, kind: nom::error::ErrorKind) -> Self {
+            ParseError {
+                input,
+                kind: ParseErrorKind::Nom(kind),
+            }
+        }
 
-    named!(number<Input, f64>, alt!(floating_point_signed | integer));
-    named!(matrix<Input,Transform>,
-           delimited!(tuple!(tag!("matrix"),wsp_opt,char!('('),wsp_opt),
-                      map!(tuple!(number, comma_wsp, number, comma_wsp, 
-                                  number, comma_wsp, number, comma_wsp,
-                                  number, comma_wsp, number),
-                           |(a,_,b,_,c,_,d,_,e,_,f)| 
-                           Transform{matrix:[a,b,c,d,e,f]}),
-                      tuple!(wsp_opt,char!(')'))));
+        fn append(_input: &'a str, _kind: nom::error::ErrorKind, other: Self) -> Self {
+            other
+        }
+    }
 
-    named!(translate<Input,Transform>, 
-           delimited!(tuple!(tag!("translate"),wsp_opt,char!('('),wsp_opt), 
-                      map!(tuple!(number, 
-                                  opt!(preceded!(comma_wsp,
-                                                 number))),
-                                  |(x,y)| {
-                                      let y = y.unwrap_or(0.0);
-                                      Transform{matrix:[1f64,0f64,
-                                                        0f64,1f64,
-                                                        x,y]}}),
-                      tuple!(wsp_opt,char!(')'))));
-    named!(scale<Input,Transform>,  
-           delimited!(tuple!(tag!("scale"),wsp_opt,char!('('),wsp_opt),
-                      map!(tuple!(number, 
-                                  opt!(preceded!(comma_wsp,
-                                                 number))),
-                           |(x,y)| {
-                               let y = match y {
-                                   Some(v) => v,
-                                   None => x
-                               };
-                               Transform{matrix:[x,0f64,0f64,y,0.0,0.0]}}),
-                      tuple!(wsp_opt,char!(')'))));
+    impl<'a> FromExternalError<&'a str, ParseFloatError> for ParseError<'a> {
+        fn from_external_error(
+            input: &'a str,
+            _kind: nom::error::ErrorKind,
+            _float_err: ParseFloatError,
+        ) -> Self {
+            ParseError {
+                input,
+                kind: ParseErrorKind::InvalidNumber,
+            }
+        }
+    }
+    type ParseResult<'a, T> = IResult<&'a str, T, ParseError<'a>>;
 
-    named!(rotate<Input,Transform>,  
-           delimited!(tuple!(tag!("rotate"),wsp_opt,char!('('),wsp_opt),
-                      map!(tuple!(number, 
-                                  opt!(tuple!(preceded!(comma_wsp,
-                                                        number),
-                                              preceded!(comma_wsp,
-                                                        number))
-                                  )),
-                           |(a,c)| {
-                               let a = a * PI / 180.0;
-                               match c {
-                                   Some((cx,cy)) =>
-                                       Transform::rotate_around(a, 
-                                                                &Point {x: cx,
-                                                                        y: cy}),
-                                   None => Transform::rotate(a)
-                               } }),
-                      tuple!(wsp_opt,char!(')'))));
+    fn wsp_opt<'a>(input: &'a str) -> ParseResult<'a, &str> {
+        multispace0(input)
+    }
 
-    named!(skewx<Input,Transform>,  
-           delimited!(tuple!(tag!("skewX"),wsp_opt,char!('('),wsp_opt),
-                      map!(number,
-                           |a| {
-                               let a = a * PI / 180.0;
-                              Transform::skew_x(a)
-                           }),
-                      tuple!(wsp_opt,char!(')'))));
+    fn comma_wsp<'a>(input: &'a str) -> ParseResult<'a, &str> {
+        alt((
+            recognize(delimited(wsp_opt, complete::char(','), wsp_opt)),
+            multispace1,
+        ))(input)
+    }
 
-    named!(skewy<Input,Transform>,  
-           delimited!(tuple!(tag!("skewY"),wsp_opt,char!('('),wsp_opt),
-                      map!(number,
-                           |a| {
-                               let a = a * PI / 180.0;
-                               Transform::skew_y(a)
-                           }),
-                      tuple!(wsp_opt,char!(')'))));
-    named!(transform<Input, Transform>, 
-           alt!(matrix 
-                | translate 
-                | scale 
-                | rotate 
-                | skewx 
-                | skewy));
+    fn sign_opt<'a>(input: &'a str) -> ParseResult<'a, f64> {
+        map(opt(one_of("+-")), |s| match s {
+            Some('-') => -1.0,
+            Some(_) | None => 1.0,
+        })(input)
+    }
+    fn fractional_constant<'a>(input: &'a str) -> ParseResult<'a, &'a str> {
+        alt((
+            recognize(separated_pair(digit0, complete::char('.'), digit1)),
+            recognize(terminated(digit1, complete::char('.'))),
+        ))(input)
+    }
+    fn exponent<'a>(input: &'a str) -> ParseResult<'a, &'a str> {
+        recognize(tuple((one_of("eE"), sign_opt, digit1)))(input)
+    }
 
-    named!(transforms<Input, Transform>,
-    alt!(map!(complete!(tuple!(transform, comma_wsp, transforms)),
-              |(a,_,b)| a*b)
-         | transform
-    ));
+    fn floating_point_constant<'a>(input: &'a str) -> ParseResult<'a, &'a str> {
+        alt((
+            recognize(tuple((fractional_constant, opt(exponent)))),
+            recognize(tuple((digit1, exponent))),
+        ))(input)
+    }
 
-    named!(pub transform_list<Input, Transform>, preceded!(multispace0,transforms));
+    fn floating_point_signed<'a>(input: &'a str) -> ParseResult<'a, f64> {
+        map_res(
+            recognize(tuple((sign_opt, floating_point_constant))),
+            |s: &str| f64::from_str(s),
+        )(input)
+    }
 
-    named!(pub path_command<Input, (char, Vec<f64>)>,
-           tuple!(preceded!(wsp_opt, one_of("mMzZlLhHvVcCsSqQtTaA")),
-                            preceded!(wsp_opt,
-                                      separated_list0!(comma_wsp, number))));
+    fn integer<'a>(input: &'a str) -> ParseResult<'a, f64> {
+        map_res(recognize(tuple((opt(one_of("+-")), digit1))), |s: &str| {
+            f64::from_str(s)
+        })(input)
+    }
+    fn number<'a>(input: &'a str) -> ParseResult<'a, f64> {
+        alt((floating_point_signed, integer))(input)
+    }
+    fn matrix<'a>(input: &'a str) -> ParseResult<'a, Transform> {
+        delimited(
+            tuple((tag("matrix"), wsp_opt, complete::char('('), wsp_opt)),
+            map(
+                tuple((
+                    number, comma_wsp, number, comma_wsp, number, comma_wsp, number, comma_wsp,
+                    number, comma_wsp, number,
+                )),
+                |(a, _, b, _, c, _, d, _, e, _, f)| Transform {
+                    matrix: [a, b, c, d, e, f],
+                },
+            ),
+            tuple((wsp_opt, complete::char(')'))),
+        )(input)
+    }
+    fn translate<'a>(input: &'a str) -> ParseResult<'a, Transform> {
+        delimited(
+            tuple((tag("translate"), wsp_opt, complete::char('('), wsp_opt)),
+            map(pair(number, opt(preceded(comma_wsp, number))), |(x, y)| {
+                let y = y.unwrap_or(0.0);
+                Transform {
+                    matrix: [1f64, 0f64, 0f64, 1f64, x, y],
+                }
+            }),
+            tuple((wsp_opt, complete::char(')'))),
+        )(input)
+    }
 
-    named!(pub view_box_args<Input, [f64;4]>,
-    map!(tuple!(wsp_opt, number, comma_wsp, number, comma_wsp,
-             number, comma_wsp, number, wsp_opt),
-         |(_,a,_,b,_,c,_,d,_)| [a,b,c,d]
-    ));
+    fn scale<'a>(input: &'a str) -> ParseResult<'a, Transform> {
+        delimited(
+            tuple((tag("scale"), wsp_opt, complete::char('('), wsp_opt)),
+            map(pair(number, opt(preceded(comma_wsp, number))), |(x, y)| {
+                let y = match y {
+                    Some(v) => v,
+                    None => x,
+                };
+                Transform {
+                    matrix: [x, 0f64, 0f64, y, 0.0, 0.0],
+                }
+            }),
+            tuple((wsp_opt, complete::char(')'))),
+        )(input)
+    }
 
+    fn rotate<'a>(input: &'a str) -> ParseResult<'a, Transform> {
+        delimited(
+            tuple((tag("rotate"), wsp_opt, complete::char('('), wsp_opt)),
+            map(
+                pair(
+                    number,
+                    opt(pair(
+                        preceded(comma_wsp, number),
+                        preceded(comma_wsp, number),
+                    )),
+                ),
+                |(a, c)| {
+                    let a = a * PI / 180.0;
+                    match c {
+                        Some((cx, cy)) => Transform::rotate_around(a, &Point { x: cx, y: cy }),
+                        None => Transform::rotate(a),
+                    }
+                },
+            ),
+            pair(wsp_opt, complete::char(')')),
+        )(input)
+    }
+    fn skewx<'a>(input: &'a str) -> ParseResult<'a, Transform> {
+        delimited(
+            tuple((tag("skewX"), wsp_opt, complete::char('('), wsp_opt)),
+            map(number, |a| {
+                let a = a * PI / 180.0;
+                Transform::skew_x(a)
+            }),
+            pair(wsp_opt, complete::char(')')),
+        )(input)
+    }
+
+    fn skewy<'a>(input: &'a str) -> ParseResult<'a, Transform> {
+        delimited(
+            tuple((tag("skewY"), wsp_opt, complete::char('('), wsp_opt)),
+            map(number, |a| {
+                let a = a * PI / 180.0;
+                Transform::skew_y(a)
+            }),
+            pair(wsp_opt, complete::char(')')),
+        )(input)
+    }
+
+    fn transform<'a>(input: &'a str) -> ParseResult<'a, Transform> {
+        alt((matrix, translate, scale, rotate, skewx, skewy))(input)
+    }
+
+    fn transforms<'a>(input: &'a str) -> ParseResult<'a, Transform> {
+        alt((
+            map(
+                separated_pair(transform, comma_wsp, transforms),
+                |(a, b)| a * b,
+            ),
+            transform,
+        ))(input)
+    }
+
+    pub fn transform_list<'a>(input: &'a str) -> ParseResult<'a, Transform> {
+        preceded(multispace0, transforms)(input)
+    }
+
+    pub fn path_command<'a>(input: &'a str) -> ParseResult<'a, (char, Vec<f64>)> {
+        pair(
+            preceded(wsp_opt, one_of("mMzZlLhHvVcCsSqQtTaA")),
+            preceded(wsp_opt, separated_list0(comma_wsp, number)),
+        )(input)
+    }
+
+    pub fn view_box_args<'a>(input: &'a str) -> ParseResult<'a, [f64; 4]> {
+        map(
+            tuple((
+                wsp_opt, number, comma_wsp, number, comma_wsp, number, comma_wsp, number, wsp_opt,
+            )),
+            |(_, a, _, b, _, c, _, d, _)| [a, b, c, d],
+        )(input)
+    }
     // Returns unit length as milimeters
     const INCH: f64 = 25.4;
     const PX: f64 = 1.0;
     const PT: f64 = INCH / 72.0;
 
-    named!(pub length_unit<Input, f64>,
-    alt!(value!(1.0,tag!("mm"))
-         | value!(0.01,tag!("cm"))
-         | value!(INCH,tag!("in"))
-         | value!(PX,tag!("px"))
-         | value!(PT,tag!("pt"))
-         | value!(PT*12.0,tag!("pc"))
-    ));
-    named!(pub physical_length<Input, f64>,
-    map!(tuple!(wsp_opt, number, wsp_opt,
-                opt!(terminated!(length_unit,wsp_opt))),
-         |(_,value,_,opt_unit)| {
-             match opt_unit {
-                 Some(unit) => value * unit,
-                 None => value
-             }
-         }));
+    pub fn length_unit<'a>(input: &'a str) -> ParseResult<'a, f64> {
+        alt((
+            value(1.0, tag("mm")),
+            value(10.0, tag("cm")),
+            value(INCH, tag("in")),
+            value(PX, tag("px")),
+            value(PT, tag("pt")),
+            value(PT * 12.0, tag("pc")),
+        ))(input)
+    }
+
+    pub fn physical_length<'a>(input: &'a str) -> ParseResult<'a, f64> {
+        map(
+            tuple((
+                wsp_opt,
+                number,
+                wsp_opt,
+                opt(terminated(length_unit, wsp_opt)),
+            )),
+            |(_, value, _, opt_unit)| match opt_unit {
+                Some(unit) => value * unit,
+                None => value,
+            },
+        )(input)
+    }
 
     #[test]
     fn test_number() {
@@ -176,29 +287,31 @@ mod parser {
         let res = number("");
         assert_eq!(
             res,
-            Err(nom::Err::Error(nom::error::Error {
+            Err(nom::Err::Error(ParseError {
                 input: "",
-                code: nom::error::ErrorKind::Alt
+                kind: ParseErrorKind::Nom(nom::error::ErrorKind::Digit)
             }))
         );
     }
 }
 
-pub fn parse_transform(s: &str) -> Result<Transform, nom::error::Error<&str>> {
+pub use self::parser::ParseError;
+
+pub fn parse_transform(s: &str) -> Result<Transform, ParseError> {
     match parser::transform_list(s).finish() {
         Ok((_, o)) => Ok(o),
         Err(e) => Err(e),
     }
 }
 
-pub fn parse_view_box(s: &str) -> Result<[f64; 4], nom::error::Error<&str>> {
+pub fn parse_view_box(s: &str) -> Result<[f64; 4], ParseError> {
     match parser::view_box_args(s).finish() {
         Ok((_, o)) => Ok(o),
         Err(e) => Err(e),
     }
 }
 
-pub fn parse_length(s: &str) -> Result<f64, nom::error::Error<&str>> {
+pub fn parse_length(s: &str) -> Result<f64, ParseError> {
     match parser::physical_length(s).finish() {
         Ok((_, o)) => Ok(o),
         Err(e) => Err(e),
@@ -333,14 +446,14 @@ fn transform_ellipse(rx: f64, ry: f64, rot: f64, m: [f64; 4]) -> (f64, f64, f64)
     if den <= 0.0 {
         panic!("Failed to compute rx");
     }
-    let trx = (1.0 / den).sqrt();
+    let tr_x = (1.0 / den).sqrt();
 
     let den = q[0] * ts2 - 2.0 * q[2] * tcs + q[3] * tc2;
     if den <= 0.0 {
         panic!("Failed to compute ry");
     }
-    let try = (1.0 / den).sqrt();
-    (trx, try, trot)
+    let tr_y = (1.0 / den).sqrt();
+    (tr_x, tr_y, trot)
     //ellipse_canonical(trx, try, trot)
 }
 
@@ -762,8 +875,8 @@ fn assert_transform_eq(a: &Transform, b: &Transform) {
 
 #[cfg(test)]
 fn assert_transform_result_eq(
-    a: &nom::IResult<&str, Transform>,
-    b: &nom::IResult<&str, Transform>,
+    a: &Result<(&str, Transform), nom::Err<ParseError>>,
+    b: &Result<(&str, Transform), nom::Err<ParseError>>,
 ) {
     if let (&Ok((_, left)), &Ok((_, right))) = (a, b) {
         assert_transform_eq(&left, &right);
@@ -788,7 +901,7 @@ fn assert_parsed_transform_eq(a: &str, b: &str) {
 }
 
 #[cfg(test)]
-fn transform_result(m: &[f64; 6]) -> nom::IResult<&str, Transform> {
+fn transform_result(m: &[f64; 6]) -> Result<(&str, Transform), nom::Err<ParseError>> {
     Ok::<(&str, Transform), _>(("", Transform::new(m)))
 }
 

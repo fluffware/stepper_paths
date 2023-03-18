@@ -15,6 +15,10 @@ impl Vector {
         self.x * other.x + self.y * other.y
     }
 
+    pub fn cross_mul(&self, other: Self) -> f64 {
+        self.x * other.y - self.y * other.x
+    }
+
     /// Normalize vector to unit length
     pub fn unit(&self) -> Vector {
         let l = self.length();
@@ -148,6 +152,16 @@ impl std::ops::Mul<f64> for Vector {
     }
 }
 
+impl std::ops::Div<f64> for Vector {
+    type Output = Vector;
+    fn div(self, s: f64) -> Vector {
+        Vector {
+            x: self.x / s,
+            y: self.y / s,
+        }
+    }
+}
+
 impl std::ops::Neg for Vector {
     type Output = Vector;
     fn neg(self) -> Self::Output {
@@ -155,6 +169,18 @@ impl std::ops::Neg for Vector {
             x: -self.x,
             y: -self.y,
         }
+    }
+}
+
+impl<A,B> From<(A, B)> for Vector
+where
+    A: Into<f64>,
+    B: Into<f64>,
+{
+    fn from(p: (A, B)) -> Vector {
+        let x = p.0.into();
+        let y = p.1.into();
+        Vector { x, y }
     }
 }
 
@@ -390,7 +416,7 @@ fn check_decompose(tr: Vector, scale: Vector, rot: f64, skew_x: f64, skew_y: f64
 
 #[test]
 fn test_decompose() {
-    let mut a = Transform::identity();
+    let a = Transform::identity();
     assert_eq!(
         a.decompose(),
         (

@@ -7,7 +7,7 @@ use super::super::{
     curves::line::Line,
 };
 use super::svg_utils;
-use std::f64::consts::PI;
+//use std::f64::consts::PI;
 use std::io::Result;
 
 #[test]

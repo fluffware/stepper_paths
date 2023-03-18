@@ -224,7 +224,7 @@ fn main() {
     };
 
     let buffer = match image::load(BufReader::new(file), image::ImageFormat::Png) {
-        Ok(dyn_buffer) => dyn_buffer.to_luma(),
+        Ok(dyn_buffer) => dyn_buffer.to_luma8(),
         Err(e) => {
             println!("Failed to read image: {}", e);
             return;

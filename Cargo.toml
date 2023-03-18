@@ -22,12 +22,13 @@ path = "src/image_raster.rs"
 [dependencies]
 
 libc="0.2.30"
-num="0.1.41"
+num="0.4"
 serial="*"
 xml-rs = "0.8"
-nom = "6"
+nom = "7"
 getopts = "0.2"
 serde = {version = "*", features=["derive"]}
 serde_json = "1.0"
 image = "0.23.*"
 approx = "*"
+static_assertions = "1.1.0"

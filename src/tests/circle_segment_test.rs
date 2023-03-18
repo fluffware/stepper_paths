@@ -2,9 +2,9 @@ use super::super::{coords::Point, curve_approx::CurveInfo, curves::circle_segmen
 
 #[test]
 fn test_circle_segment() {
-    const radius: f64 = 3.0;
-    const start: f64 = 1.3;
-    const end: f64 = 2.7;
+    let radius: f64 = 3.0;
+    let start: f64 = 1.3;
+    let end: f64 = 2.7;
     let cs = CircleSegment::new(radius, start, end);
     assert_relative_eq!(cs.length(), radius * (end - start), max_relative = 0.0001);
     let (p, d) = cs.value(0.0);
@@ -29,9 +29,9 @@ fn test_circle_segment() {
 
 #[test]
 fn test_circle_segment_reverse() {
-    const radius: f64 = 3.0;
-    const start: f64 = 1.3;
-    const end: f64 = -0.7;
+    let radius: f64 = 3.0;
+    let start: f64 = 1.3;
+    let end: f64 = -0.7;
     let cs = CircleSegment::new(radius, start, end);
     assert_relative_eq!(cs.length(), radius * (start - end), max_relative = 0.0001);
     let (p, d) = cs.value(0.0);

@@ -1,5 +1,4 @@
 extern crate num;
-#[macro_use]
 extern crate nom;
 extern crate serde;
 extern crate xml;
@@ -22,13 +21,7 @@ pub mod stepper_control;
 pub mod svg_parser;
 pub mod svg_path_parser;
 
-pub mod curves {
-    pub mod bezier;
-    pub mod circle_segment;
-    pub mod concat_curve;
-    pub mod line;
-    pub mod linear_curve;
-}
+pub mod curves;
 
 #[cfg(test)]
 mod tests;
