@@ -49,7 +49,7 @@ pub trait PolynomCoef:
 
 impl PolynomCoef for f64 {
     fn close_to_zero(a: f64) -> bool {
-        (-10.0 * f64::EPSILON ..= 10.0 * f64::EPSILON).contains(&a)
+        (-10.0 * f64::EPSILON..=10.0 * f64::EPSILON).contains(&a)
     }
 }
 

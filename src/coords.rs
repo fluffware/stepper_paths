@@ -172,7 +172,7 @@ impl std::ops::Neg for Vector {
     }
 }
 
-impl<A,B> From<(A, B)> for Vector
+impl<A, B> From<(A, B)> for Vector
 where
     A: Into<f64>,
     B: Into<f64>,

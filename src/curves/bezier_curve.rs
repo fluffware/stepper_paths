@@ -44,9 +44,16 @@ impl BezierSegment {
         )
     }
 
-    pub fn to_svg_path(&self) -> String
-    {
-	format!("c{},{} {},{} {},{}", self.c1.x, self.c1.y, self.c2.x + self.p2.x, self.c2.y + self.p2.y, self.p2.x, self.p2.y)
+    pub fn to_svg_path(&self) -> String {
+        format!(
+            "c{},{} {},{} {},{}",
+            self.c1.x,
+            self.c1.y,
+            self.c2.x + self.p2.x,
+            self.c2.y + self.p2.y,
+            self.p2.x,
+            self.p2.y
+        )
     }
 }
 
@@ -77,10 +84,15 @@ fn test_point() {
 #[test]
 fn test_split() {
     let b1 = BezierSegment::new(Vector::from((1.0, 3.0)), (-2.0, -1.0), (5.0, -2.0));
-    let (b11 , b12) = b1.split(0.25);
+    let (b11, b12) = b1.split(0.25);
 
-    assert_eq!(b11, BezierSegment::new((0.25, 0.75), (-0.359375, 0.125), (0.921875, 0.8125)));
-    assert_eq!(b12, BezierSegment::new((1.078125, -0.375), (-1.5, -0.75), (4.078125, -2.8125)));
-    println!("b11: {} b12: {}",b11.to_svg_path(), b12.to_svg_path());
-    
+    assert_eq!(
+        b11,
+        BezierSegment::new((0.25, 0.75), (-0.359375, 0.125), (0.921875, 0.8125))
+    );
+    assert_eq!(
+        b12,
+        BezierSegment::new((1.078125, -0.375), (-1.5, -0.75), (4.078125, -2.8125))
+    );
+    println!("b11: {} b12: {}", b11.to_svg_path(), b12.to_svg_path());
 }

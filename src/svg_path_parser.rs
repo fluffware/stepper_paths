@@ -1,9 +1,9 @@
 use coords::Point;
 use coords::Transform;
+use nom::Finish;
 use std::error::Error;
 use std::f64::consts::PI;
 use stepper_context::CurveSegment;
-use nom::Finish;
 
 mod parser {
     use coords::Point;
@@ -29,9 +29,9 @@ mod parser {
     impl Display for ParseErrorKind {
         fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), fmt::Error> {
             match self {
-		ParseErrorKind::InvalidNumber => {
-		    write!(f, "Invalid number")
-		}
+                ParseErrorKind::InvalidNumber => {
+                    write!(f, "Invalid number")
+                }
                 ParseErrorKind::Nom(err) => {
                     write!(f, "{}", err.description())
                 }
@@ -90,7 +90,7 @@ mod parser {
         ))(input)
     }
 
-    fn sign_opt(input: & str) -> ParseResult<f64> {
+    fn sign_opt(input: &str) -> ParseResult<f64> {
         map(opt(one_of("+-")), |s| match s {
             Some('-') => -1.0,
             Some(_) | None => 1.0,

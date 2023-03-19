@@ -1,5 +1,5 @@
-extern crate num;
 extern crate nom;
+extern crate num;
 extern crate serde;
 extern crate xml;
 

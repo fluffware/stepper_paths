@@ -13,6 +13,7 @@ use std::io::Result;
 #[test]
 fn concat_equidistant() -> Result<()> {
     let mut plot = svg_utils::SvgPlot::new();
+    plot.set_line_width(0.2);
     let mut concat = ConcatCurve::new();
     let mut p_start = Point { x: 0.0, y: 0.0 };
     {
@@ -35,6 +36,7 @@ fn concat_equidistant() -> Result<()> {
         let dir = Vector { x: 0.0, y: 5.0 };
         let end = Point { x: -7.0, y: 0.0 };
         let c = CircleSegment::new_start_direction(end, dir);
+        plot.add_circle_segment(p_start, p_start + end, dir);
         p_start += end;
         concat.add(Box::new(c));
     }
@@ -42,6 +44,7 @@ fn concat_equidistant() -> Result<()> {
         let dir = Vector { x: 0.0, y: -5.0 };
         let end = Point { x: -7.0, y: 2.0 };
         let c = CircleSegment::new_start_direction(end, dir);
+        plot.add_circle_segment(p_start, p_start + end, dir);
         p_start += end;
         concat.add(Box::new(c));
     }
@@ -49,6 +52,7 @@ fn concat_equidistant() -> Result<()> {
         let dir = Vector { x: 4.0, y: 5.0 };
         let end = Point { x: 3.0, y: 2.0 };
         let c = CircleSegment::new_start_direction(end, dir);
+        plot.add_circle_segment(p_start, p_start + end, dir);
         p_start += end;
         concat.add(Box::new(c));
     }

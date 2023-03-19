@@ -21,8 +21,8 @@ pub fn polyval(polynom: &[f64], t: f64) -> f64 {
 fn polyder(polynom: &[f64]) -> Vec<f64> {
     let len = polynom.len();
     let mut deriv = Vec::with_capacity(len - 1);
-    for (i,p) in polynom[1..len].iter().enumerate() {
-        deriv.push(p * ((i+1) as f64));
+    for (i, p) in polynom[1..len].iter().enumerate() {
+        deriv.push(p * ((i + 1) as f64));
     }
     deriv
 }
@@ -31,7 +31,7 @@ fn polyint(polynom: &[f64]) -> Vec<f64> {
     let len = polynom.len();
     let mut int = Vec::with_capacity(len + 1);
     int.push(0.0);
-    for (i,p) in  polynom.iter().enumerate() {
+    for (i, p) in polynom.iter().enumerate() {
         int.push(*p / ((i + 1) as f64));
     }
     int
@@ -241,7 +241,7 @@ pub fn find_param(ints: &[IntegralSegment], l: f64) -> f64 {
                     low = mid;
                 }
             }
-	    low + ints[i - 1].start
+            low + ints[i - 1].start
         }
     }
 }
@@ -404,8 +404,8 @@ fn test_find_param() {
     let length = eval_int(&ints, 1.0);
     for i in 0..13 {
         let l = f64::from(i) * length / 12.0;
-	let t = find_param(&ints, l);
-	assert_relative_eq!(l, eval_int(&ints, t), epsilon=1e-9);
+        let t = find_param(&ints, l);
+        assert_relative_eq!(l, eval_int(&ints, t), epsilon = 1e-9);
     }
 
     let p = [4.0, -12.0, 17.0, -12.0, 4.0]; // (2 t^2 -3 t + 2)^2
@@ -413,9 +413,7 @@ fn test_find_param() {
     let length = eval_int(&ints, 1.0);
     for i in 0..13 {
         let l = f64::from(i) * length / 12.0;
-	let t = find_param(&ints, l);
-	assert_relative_eq!(l, eval_int(&ints, t), epsilon=1e-9);
+        let t = find_param(&ints, l);
+        assert_relative_eq!(l, eval_int(&ints, t), epsilon = 1e-9);
     }
-
-    
 }

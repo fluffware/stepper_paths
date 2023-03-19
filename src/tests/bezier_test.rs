@@ -62,6 +62,34 @@ fn test_bezier_equidistant() -> Result<()> {
     let c2 = Point { x: 50.0, y: 6.0 };
     let p2 = Point { x: 67.0, y: 4.0 };
     draw_bezier_equidistant(&mut plot, p1, c1, c2, p2);
+
+    let p1 = Point {
+        x: 28.909467,
+        y: 52.739158,
+    };
+    let c1 = Point {
+        x: 12.809148,
+        y: 94.805405,
+    };
+    let c2 = Point {
+        x: 17.152937,
+        y: 106.56895,
+    };
+    let p2 = Point {
+        x: 32.839858,
+        y: 91.817125,
+    };
+    draw_bezier_equidistant(&mut plot, p1, c1, c2, p2);
+
+    let p1 = Point::from((43.425689, 29.957988));
+    let c1 = Point::from((104.16765, 75.881668));
+
+    let c2 = Point::from((97.10719, 122.03192));
+
+    let p2 = Point::from((104.6175, 74.679028));
+
+    draw_bezier_equidistant(&mut plot, p1, c1, c2, p2);
+
     plot.write("test_bezier_equidistant")?;
     Ok(())
 }
