@@ -22,7 +22,7 @@ fn polyder(polynom: &[f64]) -> Vec<f64> {
     let len = polynom.len();
     let mut deriv = Vec::with_capacity(len - 1);
     for (i,p) in polynom[1..len].iter().enumerate() {
-        deriv.push(p * (i as f64));
+        deriv.push(p * ((i+1) as f64));
     }
     deriv
 }
