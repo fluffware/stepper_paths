@@ -122,13 +122,12 @@ pub fn parse_document<T: Read>(
                             ),
                             _ => return Err("svg element needs width and height attributes".into()),
                         };
-                        let (vbx, vby, vbw, vbh) = match view_box_rect {
+                        let (_vbx, _vby, vbw, vbh) = match view_box_rect {
                             Some(vb) => (vb[0], vb[1], vb[2], vb[3]),
                             None => (0.0, 0.0, width, height),
                         };
                         let sc = Transform::scale_xy(width / vbw, height / vbh);
-                        let tr = Transform::translate(vbx, vby);
-                        transform = transform * sc * tr;
+                        transform = transform * sc;
                     }
                 }
             }
