@@ -812,11 +812,9 @@ fn build_path(
             }
         }
         'z' | 'Z' => {
-	    if (ctxt.pos - ctxt.start).length() > 1e-6 {
-		ctxt.pos = ctxt.start;
-		let p2 = *tr * ctxt.pos;
-		segs.push(CurveSegment::LineTo(p2));
-	    }
+	    ctxt.pos = ctxt.start;
+	    let p2 = *tr * ctxt.pos;
+	    segs.push(CurveSegment::CloseTo(p2));
         }
         c => return Err(format!("Unknown command '{}'", c)),
     };

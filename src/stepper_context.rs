@@ -13,32 +13,25 @@ use std::error::Error;
 
 #[derive(Debug)]
 pub enum CurveSegment {
-    GoTo(Point),       // x,y
-    GoToRel(Point),    // x,y
-    LineTo(Point),     // x,y
-    LineToRel(Vector), // x,y
+    GoTo(Point),    // x,y
+    LineTo(Point),  // x,y
+    CloseTo(Point), // Draw a line to the start point of this segment
     // Control points are relative to the closest end point
-    CurveTo(Point, Vector, Vector),     // p2, c1, c2
-    CurveToRel(Vector, Vector, Vector), // p2, c1, c2
-    Arc(f64, f64, f64, f64, f64),       // rx,ry, start, end, rotation
+    CurveTo(Point, Vector, Vector), // p2, c1, c2
+    Arc(f64, f64, f64, f64, f64),   // rx,ry, start, end, rotation
 }
 
 impl CurveSegment {
     pub fn transform(&self, trans: Transform) -> CurveSegment {
         match self {
             CurveSegment::GoTo(p) => CurveSegment::GoTo(trans * *p),
-            CurveSegment::GoToRel(p) => CurveSegment::GoToRel(trans.no_translation() * *p),
             CurveSegment::LineTo(p) => CurveSegment::LineTo(trans * *p),
-            CurveSegment::LineToRel(p) => CurveSegment::LineToRel(trans.no_translation() * *p),
+            CurveSegment::CloseTo(p) => CurveSegment::CloseTo(trans * *p),
             CurveSegment::CurveTo(p2, c1, c2) => CurveSegment::CurveTo(
                 trans * *p2,
                 trans.no_translation() * *c1,
                 trans.no_translation() * *c2,
             ),
-            CurveSegment::CurveToRel(p2, c1, c2) => {
-                let ntrans = trans.no_translation();
-                CurveSegment::CurveToRel(ntrans * *p2, ntrans * *c1, ntrans * *c2)
-            }
             CurveSegment::Arc(rx, ry, start, end, rotation) => {
                 let (_, scale, trans_rot, _, _) = trans.decompose();
 
@@ -110,23 +103,15 @@ fn curve_segment_to_info(
     current_pos: &mut Point,
 ) -> Option<Box<dyn CurveInfo>> {
     Some(match seg {
-        CurveSegment::LineTo(p2) => {
+        CurveSegment::LineTo(p2) | CurveSegment::CloseTo(p2) => {
             let rel = *p2 - *current_pos;
             *current_pos = *p2;
             Box::new(curves::line::Line::new(rel))
-        }
-        CurveSegment::LineToRel(p2) => {
-            *current_pos += *p2;
-            Box::new(curves::line::Line::new(*p2))
         }
         CurveSegment::CurveTo(p2, c1, c2) => {
             let rel = *p2 - *current_pos;
             *current_pos = *p2;
             Box::new(curves::bezier::Bezier::new(*c1, rel + *c2, rel))
-        }
-        CurveSegment::CurveToRel(p2, c1, c2) => {
-            *current_pos += *p2;
-            Box::new(curves::bezier::Bezier::new(*c1, *p2 + *c2, *p2))
         }
         CurveSegment::Arc(rx, ry, start, end, _rot) => {
             // Only circles are supported
@@ -524,46 +509,45 @@ impl StepperContext {
         let mut curves = curves::concat_curve::ConcatCurve::new();
         loop {
             let mut next_pos = current_pos;
-            if let Some(info) = curve_segment_to_info(seg, &mut next_pos) {
-                let (_, start_dir) = info.value(0.0);
-                if let Some(prev_dir) = prev_dir {
-                    println!("Direction: {} -> {}", prev_dir, start_dir);
-                    if start_dir.x * prev_dir.x + start_dir.y * prev_dir.y < self.min_cos_connect {
-                        println!("Splitting curve");
+            match *seg {
+                CurveSegment::GoTo(p) => {
+                    // Skip gotos to the current position
+                    if self.to_steps(p.x, X_INDEX) != self.channels[X_INDEX].pos
+                        || self.to_steps(p.y, Y_INDEX) != self.channels[Y_INDEX].pos
+                    {
                         let err = self.draw_curve(start, &mut curves, v)?;
                         acc_max_err(&mut max_err, &err);
+                        current_pos = p;
                         start = current_pos;
+                        prev_dir = None;
                     }
                 }
-                let (_, end_dir) = info.value(info.length());
-                current_pos = next_pos;
-                prev_dir = Some(end_dir);
-                curves.add(info);
-            } else {
-                match *seg {
-                    CurveSegment::GoTo(p) => {
-                        // Skip gotos to the current position
-                        if self.to_steps(p.x, X_INDEX) != self.channels[X_INDEX].pos
-                            || self.to_steps(p.y, Y_INDEX) != self.channels[Y_INDEX].pos
-                        {
-                            let err = self.draw_curve(start, &mut curves, v)?;
-                            acc_max_err(&mut max_err, &err);
-                            current_pos = p;
-                            start = current_pos;
-                            prev_dir = None;
+                CurveSegment::CloseTo(p2) if (current_pos - p2).length() < 1e-6 => {
+                    // Skip short closing lines
+                    current_pos = p2;
+                }
+                _ => {
+                    if let Some(info) = curve_segment_to_info(seg, &mut next_pos) {
+                        let (_, start_dir) = info.value(0.0);
+                        if let Some(prev_dir) = prev_dir {
+                            println!("Direction: {} -> {}", prev_dir, start_dir);
+                            if start_dir.x * prev_dir.x + start_dir.y * prev_dir.y
+                                < self.min_cos_connect
+                            {
+                                println!("Splitting curve");
+                                let err = self.draw_curve(start, &mut curves, v)?;
+                                acc_max_err(&mut max_err, &err);
+                                start = current_pos;
+                            }
                         }
+                        let (_, end_dir) = info.value(info.length());
+                        current_pos = next_pos;
+                        prev_dir = Some(end_dir);
+                        curves.add(info);
+                    } else {
+                        panic!("Unhandled CurveSegment type")
                     }
-                    CurveSegment::GoToRel(rel) => {
-                        if rel.x != 0.0 || rel.y != 0.0 {
-                            let err = self.draw_curve(start, &mut curves, v)?;
-                            acc_max_err(&mut max_err, &err);
-                            current_pos += rel;
-                            start = current_pos;
-                            prev_dir = None;
-                        }
-                    }
-                    _ => panic!("Unhandled CurveSegment type"),
-                };
+                }
             }
 
             let next_seg = iter.next();
