@@ -1,4 +1,5 @@
-use super::sqrt_poly::{build_segments, eval_int, find_param, polyadd, polymul, IntegralSegment};
+use super::sqrt_poly::{build_segments, eval_int, find_param, IntegralSegment};
+use super::polynom::Polynom;
 use coords::{Point, Vector};
 use curve_approx::CurveInfo;
 #[derive(Debug)]
@@ -18,9 +19,9 @@ impl Bezier {
     pub fn new(c1: Point, c2: Point, p2: Point) -> Bezier {
         let cx = coefficients_from_control(&[c1.x, c2.x, p2.x]);
         let cy = coefficients_from_control(&[c1.y, c2.y, p2.y]);
-        let dx = deriv_from_coefficients(&cx);
-        let dy = deriv_from_coefficients(&cy);
-        let dl2 = polyadd(&polymul(&dx, &dx), &polymul(&dy, &dy));
+        let dx = Polynom::from(deriv_from_coefficients(&cx).as_slice());
+        let dy = Polynom::from(deriv_from_coefficients(&cy).as_slice());
+        let dl2 = &(&dx * &dx) + &(&dy * &dy);
         let segments = build_segments(&dl2, 0.0, 1.0, 9);
 
         Bezier {

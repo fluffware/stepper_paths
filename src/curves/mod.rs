@@ -8,3 +8,7 @@ pub mod line;
 pub mod linear_curve;
 pub mod polynom;
 pub mod sqrt_poly;
+//pub mod inverse_derivative;
+//pub mod sqrt_derivative;
+//pub mod inverse_bezier;
+//pub mod tex;
